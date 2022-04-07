@@ -538,7 +538,7 @@ if __name__ == "__main__":
     mult_label.place(x=100, y=620)
     mult_textbox.place(x=100, y=640)
 
-    x = np.linspace(0, 100, 200)
+    x = np.linspace(0, 300, 150)
     y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
     make_graph(x, y, "Welcome!")
 

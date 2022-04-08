@@ -11,6 +11,7 @@ from tkinter import filedialog as fd
 from os import walk
 import pathlib
 from matplotlib.figure import Figure
+import csv
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)
 
@@ -20,7 +21,7 @@ export_path = ''
 temperature_list = ['temperature', 'температура']
 speed_list = ['speed', 'скорость']
 orientation_list = ['orientation', 'угловое положение']
-pressure_list = ['pressure (product)']
+pressure_list = ['pressure (product)', 'pressure']
 magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)', 'magnetic intensity (sensors)',
                       'magnetic intensity (wt gauge)']
 names_repeats_list = ["speed", "orientation", "temperature", "magnetization"]
@@ -28,29 +29,48 @@ names_repeats_list = ["speed", "orientation", "temperature", "magnetization"]
 
 # Ищем вхождение в Distance
 def setup_parse_row(filename):
-    with open(filename) as ig_file:
-        graph_data = False
-        header_row_index = 0
-        for line in ig_file:
-            header_row_index += 1
-            line = line.rstrip()  # remove '\n' at end of line
-            if "[GRAPHDATA]" in line:
-                graph_data = True
-            if graph_data and "Distance" in line:
-                header_row = np.array(line.split('\t'))
+    extension = os.path.splitext(filename)[1][1:]
+    if extension == "ig~":
+        with open(filename) as ig_file:
+            graph_data = False
+            header_row_index = 0
+            for line in ig_file:
+                header_row_index += 1
+                line = line.rstrip()  # remove '\n' at end of line
+                if "[GRAPHDATA]" in line:
+                    graph_data = True
+                if graph_data and "Distance" in line:
+                    header_row = np.array(line.split('\t'))
+                    # header_row = np.delete(header_row, 0)
+                    return header_row, header_row_index
+                if header_row_index > 50:
+                    break
+    else:
+
+        with open(filename, encoding="utf-8-sig") as csv_file:
+            reader = csv.reader(csv_file)
+            headers = next(reader)
+            print('Headers: ', headers)
+
+            if "Distance" in headers:
+                header_row = np.array(headers)
+                header_row_index = 1
                 # header_row = np.delete(header_row, 0)
                 return header_row, header_row_index
-            if header_row_index > 50:
-                break
+
     raise ValueError("Дистанции в файле не обнаружено")
 
 
 def get_axis_from_file(filename):
+    extension = os.path.splitext(filename)[1][1:]
     header_row, header_row_index = setup_parse_row(filename)
     start_column = 0
     if header_row[0] == "":
         start_column = 1
-    axis_array = np.loadtxt(filename, usecols=range(start_column, len(header_row)), skiprows=header_row_index + 9)
+    if extension == "ig~":
+        axis_array = np.loadtxt(filename, usecols=range(start_column, len(header_row)), skiprows=header_row_index + 9)
+    else:
+        axis_array = np.loadtxt(filename, usecols=range(0, len(header_row)), skiprows=1, delimiter=',')
     if header_row[0] == '':
         header_row = np.delete(header_row, 0)
     return axis_array, header_row
@@ -71,6 +91,9 @@ def graph_settings_parse(graph_name, y_max):
     По названию графика создаем Словарь с характеристиками графика
     Возращаем пустой если графику не нужны настройки, возьмутся автоматические
     """
+
+    # https://stackoverflow.com/questions/22408237/named-colors-in-matplotlib
+
     # darkcyan
     # darkgoldenrod
     # maroon
@@ -110,14 +133,14 @@ def graph_settings_parse(graph_name, y_max):
                           "color": "darkolivegreen"}
         return graph_settings
     elif list_item_in_string(magnetization_list, graph_name):
-        graph_settings = {'ymax': 60,
+        graph_settings = {'ymax': 40,
                           "ymax_format": '%.1f',
-                          "ymax_base": 10,
+                          "ymax_base": 5,
                           "ylabel": "Намагниченность, кА/м",
                           "color": "maroon"}
         return graph_settings
     elif list_item_in_string(pressure_list, graph_name):
-        graph_settings = {'ymax': 50,
+        graph_settings = {'ymax': 10,
                           "ymax_format": '%.1f',
                           "ymax_base": 1,
                           "ylabel": "Давление, МПа",
@@ -168,17 +191,22 @@ def make_graph(x_axis, y_axis, graph_name):
     ax.plot(x_axis, y_axis, color=colors['darkgreen'], linewidth=1)
 
     # Линия для графика скорости
+    # if list_item_in_string(speed_list, graph_name.lower()):
+    #     x1, y1 = [0, round_up_custom(max(x_axis), 100)], [4, 4]
+    #     ax.plot(x1, y1, color=colors['darkred'], linewidth=2)
 
-    if list_item_in_string(speed_list, graph_name.lower()):
-        x1, y1 = [0, round_up_custom(max(x_axis), 100)], [4, 4]
-        ax.plot(x1, y1, color=colors['darkred'], linewidth=2)
+    if list_item_in_string(magnetization_list, graph_name.lower()):
+        x1, y1 = [0, round_up_custom(max(x_axis), 100)], [10, 10]
+        ax.plot(x1, y1, color=colors['red'], linewidth=2)
+        x2, y2 = [0, round_up_custom(max(x_axis), 100)], [30, 30]
+        ax.plot(x2, y2, color=colors['blue'], linewidth=2)
 
     graph_settings = graph_settings_parse(graph_name, max(y_axis))
     ax.grid()
     plt.xlim(0)
     plt.ylim(0)
     plt.xlabel('Дистанция от камеры запуска, м', labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
-    plt.ylabel('Ось Y, ...', labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
+    plt.ylabel(graph_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
 
     # plt.title(graph_name, pad=30)
     # plt.title(graph_settings['color'], pad=15)
@@ -333,16 +361,16 @@ def plot():
 
     y_axis = y_axis * float(mult_textbox.get()) + float(add_textbox.get())
 
-    sovgol_value = filter_variable.get()
+    savgol_value = filter_variable.get()
 
     filter_options_list = {"no filter": 3,
-                           "SOVG light": 33,
-                           "SOVG memium": 333,
-                           "SOVG heavy": 3333}
+                           "SAVG light": 33,
+                           "SAVG medium": 333,
+                           "SAVG heavy": 667}
 
-    if sovgol_value in filter_options_list:
-        sovgol_value = filter_options_list[sovgol_value]
-        y_axis = savgol_filter(y_axis, window_length=sovgol_value, polyorder=2)
+    if savgol_value in filter_options_list:
+        savgol_value = filter_options_list[savgol_value]
+        y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
 
     make_graph(x_axis, y_axis, y_axis_name)
 
@@ -372,7 +400,7 @@ def set_ylabel_name(event):
     plt.ylabel(ylabel_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
     canvas.draw()
 
-    #print
+    # print
 
 
 def set_filter(event):
@@ -417,13 +445,14 @@ def get_minmax():
 
 def select_file():
     filetypes = (
-        ('text files', '*.ig~'),
+        ('Iligraph files', '*.ig~'),
+        ('CSV files', '*.csv'),
         ('All files', '*.*')
     )
 
     filename = fd.askopenfilename(
         title='Open a file',
-        initialdir=r'c:\Users\Vasily\OneDrive\Macro\PYTHON\SETUPread',
+        initialdir=os.path.abspath(__file__),
         filetypes=filetypes)
 
     filepath = pathlib.Path(filename).parent.resolve()
@@ -496,9 +525,9 @@ if __name__ == "__main__":
     filter_value_var = StringVar()
 
     filter_options = ["no filter",
-                      "SOVG light",
-                      "SOVG memium",
-                      "SOVG heavy"]
+                      "SAVG light",
+                      "SAVG medium",
+                      "SAVG heavy"]
     filter_variable = StringVar(window)
     filter_value_combobox = OptionMenu(window, filter_variable, *filter_options, command=set_filter)
     filter_variable.set(filter_options[0])
@@ -540,7 +569,7 @@ if __name__ == "__main__":
 
     x = np.linspace(0, 300, 150)
     y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
-    make_graph(x, y, "Welcome!")
+    make_graph(x, y, "Sin (x)")
 
     window.mainloop()
 

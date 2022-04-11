@@ -1,5 +1,8 @@
 import math
+import tkinter
+
 import numpy as np
+import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator, MaxNLocator
@@ -12,18 +15,23 @@ from os import walk
 import pathlib
 from matplotlib.figure import Figure
 import csv
+
+from datetime import datetime, date
+from datetime import timedelta
+
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)
 
 header_item = ''
 export_path = ''
+x_change_status = False
 
-temperature_list = ['temperature', 'температура']
+temperature_list = ['temperature', 'температура', 'temp']
 speed_list = ['speed', 'скорость']
-orientation_list = ['orientation', 'угловое положение']
-pressure_list = ['pressure (product)', 'pressure']
+orientation_list = ['orientation', 'угловое положение', 'угол', 'angle']
+pressure_list = ['pressure (product)', 'pressure', 'давление']
 magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)', 'magnetic intensity (sensors)',
-                      'magnetic intensity (wt gauge)']
+                      'magnetic intensity (wt gauge)', 'magnetization', 'намагниченность', 'magn']
 names_repeats_list = ["speed", "orientation", "temperature", "magnetization"]
 
 
@@ -45,18 +53,22 @@ def setup_parse_row(filename):
                     return header_row, header_row_index
                 if header_row_index > 50:
                     break
-    else:
-
+    elif extension == "csv":
         with open(filename, encoding="utf-8-sig") as csv_file:
             reader = csv.reader(csv_file)
             headers = next(reader)
-            print('Headers: ', headers)
-
             if "Distance" in headers:
                 header_row = np.array(headers)
                 header_row_index = 1
-                # header_row = np.delete(header_row, 0)
                 return header_row, header_row_index
+
+    elif extension == "xlsx":
+        pandas_df_excel = pd.read_excel(filename)
+        header_row = np.array(pandas_df_excel.columns.values)
+
+        if "Distance" in header_row:
+            header_row_index = 1
+            return header_row, header_row_index
 
     raise ValueError("Дистанции в файле не обнаружено")
 
@@ -69,8 +81,11 @@ def get_axis_from_file(filename):
         start_column = 1
     if extension == "ig~":
         axis_array = np.loadtxt(filename, usecols=range(start_column, len(header_row)), skiprows=header_row_index + 9)
-    else:
+    elif extension == "csv":
         axis_array = np.loadtxt(filename, usecols=range(0, len(header_row)), skiprows=1, delimiter=',')
+    elif extension == "xlsx":
+        pandas_df_excel = pd.read_excel(filename)
+        axis_array = np.array(pandas_df_excel)
     if header_row[0] == '':
         header_row = np.delete(header_row, 0)
     return axis_array, header_row
@@ -165,6 +180,7 @@ def make_graph(x_axis, y_axis, graph_name):
     global ax
     global fig
     global canvas
+    global x_change_status
     # https://matplotlib.org/stable/gallery/color/named_colors.html
     colors = mcolors.CSS4_COLORS
 
@@ -224,9 +240,14 @@ def make_graph(x_axis, y_axis, graph_name):
     for label in ax.yaxis.get_majorticklabels():
         label.set_transform(label.get_transform() + offsetY)
 
-    ax.xaxis.set_major_locator(MaxNLocator())
-    ax.xaxis.set_major_formatter(FormatStrFormatter('%.0f'))
-    ax.set_xlim(xmin=0, xmax=round_up_custom(max(x_axis), 100))
+    if x_change_status == False:
+        ax.set_xlim(xmin=0, xmax=round_up_custom(max(x_axis), 100))
+        ax.xaxis.set_major_locator(MaxNLocator())
+        ax.xaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    else:
+        pass
+        set_xminmax_no_event()
+        set_xmajor_no_event()
     # ax.set_xlim(xmin=0,xmax=100)
 
     # Возвращаем настройки под график по имени Серии
@@ -243,7 +264,8 @@ def make_graph(x_axis, y_axis, graph_name):
         # Меняем цвет графика
         plt.gca().get_lines()[0].set_color(graph_settings['color'])
     else:
-        ax.yaxis.set_major_locator(MaxNLocator())
+        if x_change_status == False:
+            ax.yaxis.set_major_locator(MaxNLocator())
 
     plt.subplots_adjust(left=.09, bottom=.1, right=0.97, top=0.98, wspace=0, hspace=0)
 
@@ -332,12 +354,19 @@ def SETUPgraphs(file_path, export_path):
 
 def plot_event(event):
     global y_axis_name
-    if graphs_listbox.curselection().__len__() != 0 or y_axis_name is not None:
-        plot()
-        get_minmax()
+    try:
+        if graphs_listbox.curselection().__len__() != 0 or y_axis_name is not None:
+            filter_variable.set(filter_options[0])
+            plot()
+            get_minmax()
+            status_label1.config(text=y_axis_name)
+
+    except Exception as ex:
+        print(ex)
 
 
 def plot():
+    global slider_value
     global y_axis_name
     global axis_table
     global header_row
@@ -359,28 +388,63 @@ def plot():
     x_axis = axis_table[:, x_index]
     y_axis = axis_table[:, y_index]
 
-    y_axis = y_axis * float(mult_textbox.get()) + float(add_textbox.get())
+    y_axis = y_axis * float(y_mult_textbox.get()) + float(add_textbox.get())
 
-    savgol_value = filter_variable.get()
+    # savgol_value = filter_variable.get()
+    #
+    # filter_options_list = {"no filter": 3,
+    #                        "SAVG light": 33,
+    #                        "SAVG medium": 333,
+    #                        "SAVG heavy": 667}
 
-    filter_options_list = {"no filter": 3,
-                           "SAVG light": 33,
-                           "SAVG medium": 333,
-                           "SAVG heavy": 667}
+    savgol_value = get_filter_slieder()
+    y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
 
-    if savgol_value in filter_options_list:
-        savgol_value = filter_options_list[savgol_value]
-        y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
+    # if savgol_value in filter_options_list:
+    #     savgol_value = filter_options_list[savgol_value]
+    #     y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
 
     make_graph(x_axis, y_axis, y_axis_name)
 
 
-def set_minmax(event):
+def set_xminmax_no_event():
+    global x_change_status
+    x_change_status = True
     if xmin_textbox.get() != "" and xmax_textbox.get() != 0:
         xmin = float(xmin_textbox.get())
         xmax = float(xmax_textbox.get())
         ax.set_xlim(xmin=xmin, xmax=xmax)
 
+
+def set_xminmax(event):
+    global x_change_status
+    x_change_status = True
+    if xmin_textbox.get() != "" and xmax_textbox.get() != 0:
+        xmin = float(xmin_textbox.get())
+        xmax = float(xmax_textbox.get())
+        ax.set_xlim(xmin=xmin, xmax=xmax)
+
+    canvas.draw()
+
+
+def set_xmajor_no_event():
+    global x_change_status
+    if xmajor_textbox.get() != "":
+        xmajor_value = float(xmajor_textbox.get())
+        ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
+        x_change_status = True
+
+
+def set_xmajor(event):
+    global x_change_status
+    if xmajor_textbox.get() != "":
+        xmajor_value = float(xmajor_textbox.get())
+        ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
+        x_change_status = True
+        canvas.draw()
+
+
+def set_yminmax(event):
     if ymin_textbox.get() != "" and ymax_textbox.get() != 0:
         ymin = float(ymin_textbox.get())
         ymax = float(ymax_textbox.get())
@@ -400,8 +464,6 @@ def set_ylabel_name(event):
     plt.ylabel(ylabel_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
     canvas.draw()
 
-    # print
-
 
 def set_filter(event):
     if graphs_listbox.curselection().__len__() != 0 or y_axis_name is not None:
@@ -409,10 +471,18 @@ def set_filter(event):
         get_minmax()
 
 
-def set_xmajor(event):
-    xmajor_value = float(xmajor_textbox.get())
-    ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
-    canvas.draw()
+def filter_slider_change(event):
+    plot()
+    get_minmax()
+
+
+def get_filter_slieder():
+    slider_value = filter_slider.get()
+    if slider_value < 3:
+        slider_value = 3
+    if slider_value % 2 == 0:
+        slider_value = slider_value + 1
+    return slider_value
 
 
 def set_ymajor(event):
@@ -442,136 +512,186 @@ def get_minmax():
     yaxis_name_textbox.delete(0, END)
     yaxis_name_textbox.insert(0, ylabel_name)
 
+    xticks_list = plt.gca().xaxis.major.formatter.locs
+    xticks = xticks_list[1] - xticks_list[0]
+    xmajor_textbox.delete(0, END)
+    xmajor_textbox.insert(0, xticks)
+
 
 def select_file():
     filetypes = (
         ('Iligraph files', '*.ig~'),
-        ('CSV files', '*.csv'),
-        ('All files', '*.*')
+        ('Excel files', '*.csv *.xlsx')
     )
+
+    global x_change_status
+    x_change_status = False
+    get_minmax()
 
     filename = fd.askopenfilename(
         title='Open a file',
         initialdir=os.path.abspath(__file__),
         filetypes=filetypes)
 
-    filepath = pathlib.Path(filename).parent.resolve()
-    SETUPgraphs(filename, filepath)
+    if filename != "":
+        status_label1.config(text="Choose profile...")
+        filepath = pathlib.Path(filename).parent.resolve()
+        SETUPgraphs(filename, filepath)
+
+
+def auto_chart():
+    global x_change_status
+    x_change_status = False
+    plot()
+    get_minmax()
 
 
 if __name__ == "__main__":
+
+    now = date.today()
+    ExpirationDate = now + timedelta(days=20)
+    days_left = ExpirationDate - now
+
     # the main Tkinter window
 
-    window = Tk()
-    window.title('BaZViewer 0.5')
-    window.geometry("1900x830")
-    plot_button = Button(master=window,
-                         command=plot,
-                         height=2,
-                         width=10,
-                         text="Plot")
+    if ExpirationDate >= now:
+        window = Tk()
+        window.title(f'BaZViewer, expires in (days): {days_left.days}')
+        window.geometry("1900x830")
+        autochart_button = Button(master=window, command=auto_chart, height=2, width=10, text="Auto Chart")
+        open_button = Button(master=window, text='Open a File', command=select_file)
 
-    # sv.trace("w", lambda name, index, mode, sv=sv: callback(sv))
+        graphs_listbox = Listbox(width=30, height=20)
+        graphs_listbox.bind('<<ListboxSelect>>', plot_event)
 
-    open_button = Button(master=window, text='Open a File', command=select_file)
-    get_minmax_button = Button(master=window, text='Get Min/Max', command=get_minmax, width=10, height=1)
-    set_minmax_button = Button(master=window, text='Set Min/Max', command=set_minmax, width=10, height=1)
+        status_label1 = Label(master=window, text="Selected:", font="12")
+        status_label2 = Label(master=window, text="", font="12")
 
-    graphs_listbox = Listbox(width=30, height=20)
-    graphs_listbox.bind('<<ListboxSelect>>', plot_event)
+        xmin_label = Label(master=window, text="X-Min")
+        xmax_label = Label(master=window, text="X-Max")
+        ymin_label = Label(master=window, text="Y-Min")
+        ymax_label = Label(master=window, text="Y-Max")
+        xmajor_label = Label(master=window, text="X-Major")
+        ymajor_label = Label(master=window, text="Y-Major")
 
-    xmin_label = Label(master=window, text="X-Min")
-    xmax_label = Label(master=window, text="X-Max")
-    ymin_label = Label(master=window, text="Y-Min")
-    ymax_label = Label(master=window, text="Y-Max")
-    xmajor_label = Label(master=window, text="X-Major")
-    ymajor_label = Label(master=window, text="Y-Major")
+        xmin_textbox = Entry(master=window, width=10)
+        xmax_textbox = Entry(master=window, width=10)
+        ymin_textbox = Entry(master=window, width=10)
+        ymax_textbox = Entry(master=window, width=10)
+        xmajor_textbox = Entry(master=window, width=10)
+        ymajor_textbox = Entry(master=window, width=10)
 
-    xmin_textbox = Entry(master=window, width=10)
-    xmax_textbox = Entry(master=window, width=10)
-    ymin_textbox = Entry(master=window, width=10)
-    ymax_textbox = Entry(master=window, width=10)
-    xmajor_textbox = Entry(master=window, width=10)
-    ymajor_textbox = Entry(master=window, width=10)
+        xmin_textbox.bind('<Return>', set_xminmax)
+        xmax_textbox.bind('<Return>', set_xminmax)
+        ymin_textbox.bind('<Return>', set_yminmax)
+        ymax_textbox.bind('<Return>', set_yminmax)
+        xmajor_textbox.bind('<Return>', set_xmajor)
+        ymajor_textbox.bind('<Return>', set_ymajor)
 
-    xmin_textbox.bind('<Return>', set_minmax)
-    xmax_textbox.bind('<Return>', set_minmax)
-    ymin_textbox.bind('<Return>', set_minmax)
-    ymax_textbox.bind('<Return>', set_minmax)
-    xmajor_textbox.bind('<Return>', set_xmajor)
-    ymajor_textbox.bind('<Return>', set_ymajor)
+        add_label = Label(master=window, text="Add")
+        add_textbox = Entry(master=window, width=10)
+        add_textbox.insert(0, "0")
+        add_textbox.bind('<Return>', plot_event)
 
-    add_label = Label(master=window, text="Add")
-    add_textbox = Entry(master=window, width=10)
-    add_textbox.insert(0, "0")
-    add_textbox.bind('<Return>', plot_event)
+        y_mult_label = Label(master=window, text="X Mult")
+        y_mult_textbox = Entry(master=window, width=10)
+        y_mult_textbox.insert(0, "1")
+        y_mult_textbox.bind('<Return>', plot_event)
 
-    mult_label = Label(master=window, text="Mult")
-    mult_textbox = Entry(master=window, width=10)
-    mult_textbox.insert(0, "1")
-    mult_textbox.bind('<Return>', plot_event)
+        xaxis_name_label = Label(master=window, text="X Axis Name")
+        yaxis_name_label = Label(master=window, text="Y Axis Name")
 
-    xaxis_name_label = Label(master=window, text="X Axis Name")
-    yaxis_name_label = Label(master=window, text="Y Axis Name")
+        xaxis_name_textbox = Entry(master=window, width=35)
+        yaxis_name_textbox = Entry(master=window, width=35)
 
-    xaxis_name_textbox = Entry(master=window, width=35)
-    yaxis_name_textbox = Entry(master=window, width=35)
+        xaxis_name_textbox.bind('<Return>', set_xlabel_name)
+        yaxis_name_textbox.bind('<Return>', set_ylabel_name)
 
-    xaxis_name_textbox.bind('<Return>', set_xlabel_name)
-    yaxis_name_textbox.bind('<Return>', set_ylabel_name)
+        filter_value_label = Label(master=window, text="Filter Value")
 
-    filter_value_label = Label(master=window, text="Filter Value")
+        filter_value_var = StringVar()
+        filter_options = ["no filter",
+                          "SAVG light",
+                          "SAVG medium",
+                          "SAVG heavy"]
+        filter_variable = StringVar(window)
+        filter_value_combobox = OptionMenu(window, filter_variable, *filter_options, command=set_filter)
+        filter_variable.set(filter_options[0])
+        filter_value_combobox.place(x=10, y=420)
+        filter_value_label.place(x=10, y=400)
 
-    filter_value_var = StringVar()
+        filter_slider = tkinter.Scale(window, from_=0, to=300, orient='horizontal', width=20, length=120,
+                                      command=filter_slider_change)
+        filter_slider.place(x=100, y=402)
 
-    filter_options = ["no filter",
-                      "SAVG light",
-                      "SAVG medium",
-                      "SAVG heavy"]
-    filter_variable = StringVar(window)
-    filter_value_combobox = OptionMenu(window, filter_variable, *filter_options, command=set_filter)
-    filter_variable.set(filter_options[0])
-    filter_value_combobox.place(x=10, y=420)
-    filter_value_label.place(x=10, y=400)
+        status_label1.place(x=10, y=5)
+        status_label1.config(text="Select file...")
 
-    plot_button.place(x=10, y=10, width=70, height=25)
-    open_button.place(x=10, y=35, width=70, height=25)
-    graphs_listbox.place(x=10, y=70)
+        open_button.place(x=10, y=35, width=70, height=25)
+        graphs_listbox.place(x=10, y=70)
 
-    xmin_label.place(x=10, y=450)
-    xmax_label.place(x=80, y=450)
-    xmajor_label.place(x=150, y=450)
-    xmin_textbox.place(x=10, y=470)
-    xmax_textbox.place(x=80, y=470)
-    xmajor_textbox.place(x=150, y=470)
+        xmin_label.place(x=10, y=450)
+        xmax_label.place(x=80, y=450)
+        xmajor_label.place(x=150, y=450)
+        xmin_textbox.place(x=10, y=470)
+        xmax_textbox.place(x=80, y=470)
+        xmajor_textbox.place(x=150, y=470)
 
-    ymin_label.place(x=10, y=490)
-    ymax_label.place(x=80, y=490)
-    ymajor_label.place(x=150, y=490)
-    ymin_textbox.place(x=10, y=515)
-    ymax_textbox.place(x=80, y=515)
-    ymajor_textbox.place(x=150, y=515)
+        ymin_label.place(x=10, y=490)
+        ymax_label.place(x=80, y=490)
+        ymajor_label.place(x=150, y=490)
+        ymin_textbox.place(x=10, y=515)
+        ymax_textbox.place(x=80, y=515)
+        ymajor_textbox.place(x=150, y=515)
 
-    xaxis_name_label.place(x=10, y=540)
-    xaxis_name_textbox.place(x=10, y=560)
+        xaxis_name_label.place(x=10, y=540)
+        xaxis_name_textbox.place(x=10, y=560)
 
-    yaxis_name_label.place(x=10, y=580)
-    yaxis_name_textbox.place(x=10, y=600)
+        yaxis_name_label.place(x=10, y=580)
+        yaxis_name_textbox.place(x=10, y=600)
 
-    get_minmax_button.place(x=10, y=700)
-    set_minmax_button.place(x=110, y=700)
+        autochart_button.place(x=10, y=670, width=70, height=25)
 
-    add_label.place(x=10, y=620)
-    add_textbox.place(x=10, y=640)
+        add_label.place(x=10, y=620)
+        add_textbox.place(x=10, y=640)
 
-    mult_label.place(x=100, y=620)
-    mult_textbox.place(x=100, y=640)
+        y_mult_label.place(x=100, y=620)
+        y_mult_textbox.place(x=100, y=640)
 
-    x = np.linspace(0, 300, 150)
-    y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
-    make_graph(x, y, "Sin (x)")
+        x = np.linspace(0, 300, 150)
+        y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
+        make_graph(x, y, "Sin (x)")
 
-    window.mainloop()
+
+        def on_closing():
+            window.destroy()
+            sys.exit()
+
+
+        window.protocol("WM_DELETE_WINDOW", on_closing)
+
+        window.mainloop()
+
+    else:
+
+        window = Tk()
+        window.title('BaZViewer - EXPIRED')
+        window.geometry("300x50")
+
+        exp_label = Label(master=window, text="Your version has expired", fg='red', font=15)
+        exp_label.pack()
+        exp_label2 = Label(master=window, text="Please update", fg='red', font=15)
+        exp_label2.pack()
+
+
+        def on_closing():
+            window.destroy()
+            sys.exit()
+
+
+        window.protocol("WM_DELETE_WINDOW", on_closing)
+
+        window.mainloop()
 
     # filename = os.path.dirname(__file__) + '/IG_TMP/1ngcm_StatisticsForReport.ig~'
     # #filename = os.path.dirname(__file__) + '/IG_TMP/TestPlots.ig~'

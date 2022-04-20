@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 
 
 class BViewer:
-    EXP_DAY = '2022-05-15'
 
+    EXP_DAY = '2022-05-15'
     header_item = ''
     export_path = ''
     x_change_status = False

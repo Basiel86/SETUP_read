@@ -1,13 +1,20 @@
+import json
 
-import csv
-import numpy as np
-import pandas as pd
+graph_settings = {'ymax': 10,
+                  "ymax_format": '%.1f',
+                  "ymax_base": 0.5,
+                  "ylabel": "Скорость, м/с",
+                  "color": "darkslateblue"}
 
-from numpy import genfromtxt
+json_string = json.dumps(graph_settings, indent=5)
+json_string2 = json.dumps(graph_settings)
 
-filename = r"c:\Users\Vasily\OneDrive\Macro\PYTHON\SETUP_read\test.xlsx"
+print(json_string2)
 
-WS = pd.read_excel(filename)
-axis_array = np.array(WS)
-print (WS.columns.values)
-print (axis_array)
+with open("sample.json", "w", encoding='utf-8') as outfile:
+    outfile.write(json_string)
+
+with open('sample.json', encoding='utf-8') as json_file:
+    data = json.load(json_file)
+    print("Json file:")
+    print(data['ylabel'])

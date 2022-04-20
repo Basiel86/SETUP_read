@@ -1,26 +1,30 @@
 import math
 import tkinter
-
 import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator, MaxNLocator
+from matplotlib.backends.backend_tkagg import (
+    FigureCanvasTkAgg, NavigationToolbar2Tk)
 import matplotlib.colors as mcolors
 import matplotlib.transforms
 from scipy.signal import savgol_filter
 from tkinter import *
 from tkinter import filedialog as fd
 from os import walk
+import time
 import pathlib
 from matplotlib.figure import Figure
 import csv
-
 from datetime import datetime, date
 from datetime import timedelta
-
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)
+
+import curren_settings_class as cs
+
+EXP_DAY = '2022-05-15'
 
 header_item = ''
 export_path = ''
@@ -74,9 +78,11 @@ def setup_parse_row(filename):
 
 
 def get_axis_from_file(filename):
+    global CS
     extension = os.path.splitext(filename)[1][1:]
     header_row, header_row_index = setup_parse_row(filename)
     start_column = 0
+    axis_array = 0
     if header_row[0] == "":
         start_column = 1
     if extension == "ig~":
@@ -88,6 +94,9 @@ def get_axis_from_file(filename):
         axis_array = np.array(pandas_df_excel)
     if header_row[0] == '':
         header_row = np.delete(header_row, 0)
+
+    CS = cs.CurrentSettings(header_row, os.path.basename(filename))
+
     return axis_array, header_row
 
 
@@ -95,6 +104,7 @@ def list_item_in_string(base_list, search_in_string):
     """
     Возвращает True если один из элементов List в Строке
     """
+
     for item in base_list:
         if item in search_in_string:
             return True
@@ -194,6 +204,15 @@ def make_graph(x_axis, y_axis, graph_name):
                                    master=window)
         canvas.draw()
         canvas.get_tk_widget().place(x=250, y=10)
+
+        toolbar = NavigationToolbar2Tk(canvas, window, pack_toolbar=False)
+        toolbar.update()
+        toolbar.place(x=250, y=810)
+
+        # toolbarFrame = Frame(master=window)
+        # toolbarFrame.grid(row=10, column=1)
+        # toolbar = NavigationToolbar2Tk(canvas, toolbarFrame)
+        # toolbar.place(x=10,y=50)
 
         plt.rc('font', **font)
 
@@ -356,7 +375,7 @@ def plot_event(event):
     global y_axis_name
     try:
         if graphs_listbox.curselection().__len__() != 0 or y_axis_name is not None:
-            filter_variable.set(filter_options[0])
+            filter_slider.set(0)
             plot()
             get_minmax()
             status_label1.config(text=y_axis_name)
@@ -367,44 +386,63 @@ def plot_event(event):
 
 def plot():
     global slider_value
-    global y_axis_name
     global axis_table
     global header_row
     global x_axis
     global y_axis
+    global y_axis_name
+    global x_axis_mult
+    global y_axis_filter
+    try:
+        x_axis_name = "Distance"
 
-    x_axis_name = "Distance"
+        if graphs_listbox.curselection().__len__() != 0 or y_axis_name is not None:
+            for i in graphs_listbox.curselection():
+                y_axis_name = graphs_listbox.get(i)
 
-    if graphs_listbox.curselection().__len__() != 0 or y_axis_name is not None:
-        for i in graphs_listbox.curselection():
-            y_axis_name = graphs_listbox.get(i)
+        if x_axis_name not in header_row:
+            raise ResourceWarning("Дистанция не найдена")
 
-    if x_axis_name not in header_row:
-        raise ResourceWarning("Дистанция не найдена")
+        x_index = np.argwhere(header_row == x_axis_name)[0][0]
+        y_index = np.argwhere(header_row == y_axis_name)[0][0]
 
-    x_index = np.argwhere(header_row == x_axis_name)[0][0]
-    y_index = np.argwhere(header_row == y_axis_name)[0][0]
+        x_axis = axis_table[:, x_index]
+        y_axis = axis_table[:, y_index]
 
-    x_axis = axis_table[:, x_index]
-    y_axis = axis_table[:, y_index]
+        y_axis = y_axis * float(y_mult_textbox.get()) + float(add_textbox.get())
 
-    y_axis = y_axis * float(y_mult_textbox.get()) + float(add_textbox.get())
+        # savgol_value = filter_variable.get()
+        #
+        # filter_options_list = {"no filter": 3,
+        #                        "SAVG light": 33,
+        #                        "SAVG medium": 333,
+        #                        "SAVG heavy": 667}
 
-    # savgol_value = filter_variable.get()
-    #
-    # filter_options_list = {"no filter": 3,
-    #                        "SAVG light": 33,
-    #                        "SAVG medium": 333,
-    #                        "SAVG heavy": 667}
+        savgol_value = get_filter_slieder()
+        y_axis_filter = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
+        x_axis_mult = x_axis * float(x_mult_textbox.get())
 
-    savgol_value = get_filter_slieder()
-    y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
+        # if savgol_value in filter_options_list:
+        #     savgol_value = filter_options_list[savgol_value]
+        #     y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
 
-    # if savgol_value in filter_options_list:
-    #     savgol_value = filter_options_list[savgol_value]
-    #     y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
+        x_axis_min_value = round(np.min(x_axis), 1)
+        x_axis_max_value = round(np.max(x_axis), 1)
+        y_axis_min_value = round(np.min(y_axis), 1)
+        y_axis_max_value = round(np.max(y_axis), 1)
+        y_axis_average_value = round(np.average(y_axis), 2)
+        y_axis_average_filter_value = round(np.average(y_axis_filter), 2)
 
-    make_graph(x_axis, y_axis, y_axis_name)
+        status_label2.config(text=f"Average={y_axis_average_value}\n\n"
+                                  f"XMIN={x_axis_min_value} : "
+                                  f"XMAX={x_axis_max_value}\n"
+                                  f"YMIN={y_axis_min_value} : "
+                                  f"YMAX={y_axis_max_value}", anchor='w')
+
+        make_graph(x_axis_mult, y_axis_filter, y_axis_name)
+
+    except Exception as ex:
+        print(ex)
 
 
 def set_xminmax_no_event():
@@ -477,11 +515,12 @@ def filter_slider_change(event):
 
 
 def get_filter_slieder():
-    slider_value = filter_slider.get()
-    if slider_value < 3:
-        slider_value = 3
+    slider_value = filter_slider.get() + 3
+
     if slider_value % 2 == 0:
         slider_value = slider_value + 1
+        filter_slider.set(slider_value - 3)
+
     return slider_value
 
 
@@ -519,6 +558,7 @@ def get_minmax():
 
 
 def select_file():
+    global filepath
     filetypes = (
         ('Iligraph files', '*.ig~'),
         ('Excel files', '*.csv *.xlsx')
@@ -539,33 +579,81 @@ def select_file():
         SETUPgraphs(filename, filepath)
 
 
+def open_with_file(filename_path):
+    global filepath
+    status_label1.config(text="Choose profile...")
+    filepath = pathlib.Path(filename_path).parent.resolve()
+    SETUPgraphs(filename_path, filepath)
+
+
 def auto_chart():
     global x_change_status
     x_change_status = False
+    add_textbox.delete(0, END)
+    add_textbox.insert(0, 0)
+    y_mult_textbox.delete(0, END)
+    y_mult_textbox.insert(0, 1)
+    x_mult_textbox.delete(0, END)
+    x_mult_textbox.insert(0, 1)
     plot()
     get_minmax()
 
 
+def export_selected():
+    global y_axis_name
+    global x_axis_mult
+    global y_axis_filter
+    global filepath
+
+    #filepath = pathlib.Path(filepath).parent.resolve()
+
+
+    try:
+        np.savetxt(f"{filepath}/{y_axis_name}.csv", np.transpose([x_axis_mult, y_axis_filter]), delimiter=',',
+                   header=f"Distance, {y_axis_name}")
+    except Exception as ex:
+        print("Nothing to export")
+
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
 if __name__ == "__main__":
 
-    now = date.today()
-    ExpirationDate = now + timedelta(days=20)
-    days_left = ExpirationDate - now
+    exp_date_formatted = datetime.strptime(EXP_DAY, "%Y-%m-%d").date()
+    now_date = date.today()
+    days_left = exp_date_formatted - now_date
 
     # the main Tkinter window
 
-    if ExpirationDate >= now:
+    if exp_date_formatted >= now_date:
         window = Tk()
-        window.title(f'BaZViewer, expires in (days): {days_left.days}')
-        window.geometry("1900x830")
+        window.title(f'BViewer, expires in (days): {days_left.days}')
+        window.geometry("1900x850")
+
+        ico_abs_path=resource_path('BV2.ico')
+        window.wm_iconbitmap(ico_abs_path)
+
         autochart_button = Button(master=window, command=auto_chart, height=2, width=10, text="Auto Chart")
         open_button = Button(master=window, text='Open a File', command=select_file)
 
-        graphs_listbox = Listbox(width=30, height=20)
+        export_button = Button(master=window, text='Export Current', command=export_selected)
+
+        graphs_listbox = Listbox(width=30, height=19)
         graphs_listbox.bind('<<ListboxSelect>>', plot_event)
 
         status_label1 = Label(master=window, text="Selected:", font="12")
-        status_label2 = Label(master=window, text="", font="12")
+        status_label2 = Label(master=window, font=('arial bold', 10))
+        status_label2.place(x=10, y=700)
+        status_label2.config(text="Stats...")
 
         xmin_label = Label(master=window, text="X-Min")
         xmax_label = Label(master=window, text="X-Max")
@@ -593,10 +681,15 @@ if __name__ == "__main__":
         add_textbox.insert(0, "0")
         add_textbox.bind('<Return>', plot_event)
 
-        y_mult_label = Label(master=window, text="X Mult")
+        y_mult_label = Label(master=window, text="Y Mult")
         y_mult_textbox = Entry(master=window, width=10)
         y_mult_textbox.insert(0, "1")
         y_mult_textbox.bind('<Return>', plot_event)
+
+        x_mult_label = Label(master=window, text="X Mult")
+        x_mult_textbox = Entry(master=window, width=10)
+        x_mult_textbox.insert(0, "1")
+        x_mult_textbox.bind('<Return>', plot_event)
 
         xaxis_name_label = Label(master=window, text="X Axis Name")
         yaxis_name_label = Label(master=window, text="Y Axis Name")
@@ -607,7 +700,7 @@ if __name__ == "__main__":
         xaxis_name_textbox.bind('<Return>', set_xlabel_name)
         yaxis_name_textbox.bind('<Return>', set_ylabel_name)
 
-        filter_value_label = Label(master=window, text="Filter Value")
+        filter_value_label = Label(master=window, text="Smoothing Value")
 
         filter_value_var = StringVar()
         filter_options = ["no filter",
@@ -617,17 +710,18 @@ if __name__ == "__main__":
         filter_variable = StringVar(window)
         filter_value_combobox = OptionMenu(window, filter_variable, *filter_options, command=set_filter)
         filter_variable.set(filter_options[0])
-        filter_value_combobox.place(x=10, y=420)
-        filter_value_label.place(x=10, y=400)
+        # filter_value_combobox.place(x=10, y=420)
+        filter_value_label.place(x=10, y=380)
 
-        filter_slider = tkinter.Scale(window, from_=0, to=300, orient='horizontal', width=20, length=120,
+        filter_slider = tkinter.Scale(window, from_=0, to=200, orient='horizontal', width=20, length=200,
                                       command=filter_slider_change)
-        filter_slider.place(x=100, y=402)
+        filter_slider.place(x=10, y=400)
 
         status_label1.place(x=10, y=5)
         status_label1.config(text="Select file...")
 
         open_button.place(x=10, y=35, width=70, height=25)
+        export_button.place(x=100, y=35, width=90, height=25)
         graphs_listbox.place(x=10, y=70)
 
         xmin_label.place(x=10, y=450)
@@ -655,12 +749,22 @@ if __name__ == "__main__":
         add_label.place(x=10, y=620)
         add_textbox.place(x=10, y=640)
 
-        y_mult_label.place(x=100, y=620)
-        y_mult_textbox.place(x=100, y=640)
+        y_mult_label.place(x=80, y=620)
+        y_mult_textbox.place(x=80, y=640)
 
-        x = np.linspace(0, 300, 150)
-        y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
-        make_graph(x, y, "Sin (x)")
+        x_mult_label.place(x=150, y=620)
+        x_mult_textbox.place(x=150, y=640)
+
+        try:
+            open_with_path = str(sys.argv[1])
+            # open_with_path=r"d:\WORK\OrenburgNeft\NOI 8 inch ДНС Кодяковская - ДНС Малаховская, 24.515 km\Works\2noim\2noim_StatisticsForReport.ig~"
+            print("sys path - " + open_with_path)
+            open_with_file(open_with_path)
+        except Exception as ex:
+            print("sys path error: " + str(ex))
+            x = np.linspace(0, 300, 150)
+            y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
+            make_graph(x, y, "Sin (x)")
 
 
         def on_closing():
@@ -729,7 +833,7 @@ if __name__ == "__main__":
     #
     #                 x_axis_name = "Distance"
     #                 y_axis_name = header_item
-    #
+    #                 #
     #
     #
     #                 if x_axis_name not in header_row:

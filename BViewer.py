@@ -3,7 +3,6 @@ import tkinter
 import numpy as np
 import pandas as pd
 import os
-
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator, MaxNLocator
 import matplotlib.colors as mcolors
 import matplotlib.transforms
@@ -102,6 +101,8 @@ class BViewer:
         self.x_axis_mult = ''
         self.y_axis_filter = ''
         self.savgol_value = 0
+
+        self.form_init()
 
     # Ищем вхождение в Distance
     @staticmethod
@@ -664,9 +665,5 @@ class BViewer:
             self.window.mainloop()
 
 
-def main():
-    b_viewer = BViewer()
-    b_viewer.form_init()
-
 if __name__ == "__main__":
-    main()
+    BViewer()

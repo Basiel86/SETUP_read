@@ -1,30 +1,29 @@
 import json
-import os
+import copy
+
 
 class CurrentSettings:
     graphs_list = {}
 
     graph_settings_array = {
-        'ymin': '0',
-        'ymax': '100',
-        'ymajor': '5',
-        'xmin': '0',
-        'xmax': '100',
-        'xmajor': '5',
+        'ymin': 5,
+        'ymax': 50,
+        'ymajor': 5,
+        'xmin': 0,
+        'xmax': 100,
+        'xmajor': 5,
         'ymax_format': '%.1f',
         'xlabel': 'X LABEL, ..',
         'ylabel': 'Y LABEL ..',
-        'yadd': '0',
-        'ymult': '1',
-        'xmult_desire': '100',
-        'savgol': '0',
-        'color': 'black'}
+        'yadd': 1,
+        'ymult': 1,
+        'xmult_desire': 100,
+        'savgol': 0,
+        'color': 'black',
+        'is_changed': False}
 
-    def __init__(self, header_row, filename):
-        self.graphs_list={}
-        for graph_name in header_row:
-            self.graphs_list[graph_name] = self.graph_settings_array
-        json_string = json.dumps(self.graphs_list, indent=5)
+    def __init__(self):
+        self.graphs_list = {}
 
         # дериктория сохранения файлов
         # save_dir = os.path.dirname(__file__) + "/Json"
@@ -35,46 +34,21 @@ class CurrentSettings:
         # with open(f"{file_path}.json", "w", encoding='utf-8') as outfile:
         #     outfile.write(json_string)
 
-    @staticmethod
+    def write_graphs(self, header_row, filename):
+        for graph_name in header_row:
+            self.graphs_list[graph_name] = copy.deepcopy(self.graph_settings_array)
+        json_string = json.dumps(self.graphs_list, indent=5)
+
     def get_current_settings(self, graph_name):
         return self.graphs_list[graph_name]
 
-    @staticmethod
-    def write_current_settings(self, graph_name):
-        pass
+    def write_current_settings(self, graph_name, cfg_name, cfg_value):
+        # graph_settings_array_tmp = copy.deepcopy(self.graphs_list[graph_name])
+        # graph_settings_array_tmp[cfg_name] = cfg_value
+        # self.graphs_list[graph_name] = graph_settings_array_tmp
+        self.graphs_list[graph_name][cfg_name] = cfg_value
 
-    #     graph_settings = {'ymax': ymax,
-    #                       "ymax_format": '%.1f',
-    #                       "ymax_base": 0.5,
-    #                       "ylabel": "Скорость, м/с",
-    #                       "color": "darkslateblue"}
-    #
-    #     return graph_settings
-    # elif list_item_in_string(temperature_list, graph_name):
-    #     graph_settings = {'ymax': 100,
-    #                       "ymax_format": '%.0f',
-    #                       "ymax_base": 10,
-    #                       "ylabel": "Температура, °С",
-    #                       "color": "firebrick"}
-    #     return graph_settings
-    # elif list_item_in_string(orientation_list, graph_name):
-    #     graph_settings = {'ymax': 360,
-    #                       "ymax_format": '%.0f',
-    #                       "ymax_base": 30,
-    #                       "ylabel": "Угловое положение, °",
-    #                       "color": "darkolivegreen"}
-    #     return graph_settings
-    # elif list_item_in_string(magnetization_list, graph_name):
-    #     graph_settings = {'ymax': 40,
-    #                       "ymax_format": '%.1f',
-    #                       "ymax_base": 5,
-    #                       "ylabel": "Намагниченность, кА/м",
-    #                       "color": "maroon"}
-    #     return graph_settings
-    # elif list_item_in_string(pressure_list, graph_name):
-    #     graph_settings = {'ymax': 10,
-    #                       "ymax_format": '%.1f',
-    #                       "ymax_base": 1,
-    #                       "ylabel": "Давление, МПа",
-    #                       "color": "peru"}
-    #     return graph_settings
+    def json_export(self):
+        json_string = json.dumps(self.graphs_list, indent=5)
+        with open("Settings.json", "w", encoding='utf-8') as outfile:
+            outfile.write(json_string)

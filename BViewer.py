@@ -18,7 +18,6 @@ import matplotlib.pyplot as plt
 
 
 class BViewer:
-
     EXP_DAY = '2022-05-15'
     header_item = ''
     export_path = ''
@@ -26,6 +25,7 @@ class BViewer:
 
     temperature_list = ['temperature', 'температура', 'temp']
     speed_list = ['speed', 'скорость']
+    signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
     orientation_list = ['orientation', 'угловое положение', 'угол', 'angle']
     pressure_list = ['pressure (product)', 'pressure', 'давление']
     magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)',
@@ -48,10 +48,14 @@ class BViewer:
                                "SAVG medium",
                                "SAVG heavy"]
         self.filter_variable = StringVar(self.window)
+        self.language_variable = StringVar(self.window)
         self.filter_slider = tkinter.Scale(self.window, from_=0, to=200, orient='horizontal', width=20, length=200,
                                            command=self.filter_slider_change)
         self.filter_value_combobox = OptionMenu(self.window, self.filter_variable, *self.filter_options,
                                                 command=self.set_filter)
+        self.language_options = ["RU", "EN"]
+        self.language_value_combobox = OptionMenu(self.window, self.language_variable, *self.language_options,
+                                                  command=self.language_change)
         self.filter_value_label = Label(master=self.window, text="Smoothing Value")
         self.yaxis_name_textbox = Entry(master=self.window, width=35)
         self.xaxis_name_textbox = Entry(master=self.window, width=35)
@@ -83,7 +87,8 @@ class BViewer:
         self.autochart_button = Button(master=self.window, command=self.auto_chart, height=2, width=10,
                                        text="Auto Chart")
 
-        self.CS = 0
+        self.cur_set = cs.CurrentSettings()
+
         self.x_change_status = False
         self.x_change_status = True
         self.file_path = ""
@@ -160,7 +165,8 @@ class BViewer:
         if header_row[0] == '':
             header_row = np.delete(header_row, 0)
 
-        CS = cs.CurrentSettings(header_row, os.path.basename(filename))
+        self.cur_set.write_graphs(header_row=header_row, filename=filename)
+        # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
         print(header_row)
 
@@ -209,7 +215,8 @@ class BViewer:
             graph_settings = {'ymax': ymax,
                               "ymax_format": '%.1f',
                               "ymax_base": 0.5,
-                              "ylabel": "Скорость, м/с",
+                              "ylabel_RU": "Скорость, м/с",
+                              "ylabel_EN": "Speed, m/s",
                               "color": "darkslateblue"}
 
             return graph_settings
@@ -217,29 +224,41 @@ class BViewer:
             graph_settings = {'ymax': 100,
                               "ymax_format": '%.0f',
                               "ymax_base": 10,
-                              "ylabel": "Температура, °С",
+                              "ylabel_RU": "Температура, °С",
+                              "ylabel_EN": "Temperature, deg",
                               "color": "firebrick"}
             return graph_settings
         elif self.list_item_in_string(self.orientation_list, graph_name):
             graph_settings = {'ymax': 360,
                               "ymax_format": '%.0f',
                               "ymax_base": 30,
-                              "ylabel": "Угловое положение, °",
+                              "ylabel_RU": "Угловое положение, °",
+                              "ylabel_EN": "Orientation, °",
                               "color": "darkolivegreen"}
             return graph_settings
         elif self.list_item_in_string(self.magnetization_list, graph_name):
             graph_settings = {'ymax': 40,
                               "ymax_format": '%.1f',
                               "ymax_base": 5,
-                              "ylabel": "Намагниченность, кА/м",
+                              "ylabel_RU": "Намагниченность, кА/м",
+                              "ylabel_EN": "Magnetization, kA/m",
                               "color": "maroon"}
             return graph_settings
         elif self.list_item_in_string(self.pressure_list, graph_name):
             graph_settings = {'ymax': 10,
                               "ymax_format": '%.1f',
                               "ymax_base": 1,
-                              "ylabel": "Давление, МПа",
+                              "ylabel_RU": "Давление, МПа",
+                              "ylabel_EN": "Pressure, MPa",
                               "color": "peru"}
+            return graph_settings
+        elif self.list_item_in_string(self.signal_loss_list, graph_name):
+            graph_settings = {'ymax': 100,
+                              "ymax_format": '%.0f',
+                              "ymax_base": 10,
+                              "ylabel_RU": "Потеря сигнала, %",
+                              "ylabel_EN": "Signal loss, %",
+                              "color": "darkgreen"}
             return graph_settings
         else:
             return {}
@@ -305,7 +324,15 @@ class BViewer:
         self.ax.grid()
         plt.xlim(0)
         plt.ylim(0)
-        plt.xlabel('Дистанция от камеры запуска, м', labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
+
+        lang = self.language_variable.get()
+        if lang == "RU":
+            plt.xlabel('Дистанция от камеры запуска, м', labelpad=8,
+                       font={'family': 'sans', 'weight': 'bold', 'size': 18})
+        else:
+            plt.xlabel('Distance, m', labelpad=8,
+                       font={'family': 'sans', 'weight': 'bold', 'size': 18})
+
         plt.ylabel(graph_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
 
         # plt.title(graph_name, pad=30)
@@ -342,7 +369,9 @@ class BViewer:
             # Формат оси
             self.ax.yaxis.set_major_formatter(FormatStrFormatter(graph_settings['ymax_format']))
             # Лэйбл оси
-            plt.ylabel(graph_settings['ylabel'], labelpad=10, font={'family': 'sans', 'weight': 'bold', 'size': 18})
+            lang = self.language_variable.get()
+            plt.ylabel(graph_settings[f'ylabel_{lang}'], labelpad=10,
+                       font={'family': 'sans', 'weight': 'bold', 'size': 18})
             # Меняем цвет графика
             plt.gca().get_lines()[0].set_color(graph_settings['color'])
         else:
@@ -358,7 +387,7 @@ class BViewer:
             if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
                 self.filter_slider.set(0)
                 self.plot()
-                self.get_minmax()
+                self.get_minmax_major()
                 self.status_label1.config(text=self.y_axis_name)
 
         except Exception as ex:
@@ -381,6 +410,10 @@ class BViewer:
 
             self.x_axis = self.axis_table[:, x_index]
             self.y_axis = self.axis_table[:, y_index]
+
+            # Домножение давления
+            if self.list_item_in_string(self.pressure_list, self.y_axis_name.lower()):
+                self.y_axis = self.y_axis / 9.869
 
             self.y_axis = self.y_axis * float(self.y_mult_textbox.get()) + float(self.add_textbox.get())
 
@@ -466,11 +499,15 @@ class BViewer:
     def set_filter(self, event):
         if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
             self.plot()
-            self.get_minmax()
+            self.get_minmax_major()
+
+    def language_change(self, event):
+        self.plot()
 
     def filter_slider_change(self, event):
         self.plot()
-        self.get_minmax()
+        self.get_minmax_major()
+        self.write_current_settings()
 
     def get_filter_slieder(self):
         slider_value = self.filter_slider.get() + 3
@@ -486,7 +523,7 @@ class BViewer:
         self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor_value))
         self.canvas.draw()
 
-    def get_minmax(self):
+    def get_minmax_major(self):
         xmin, xmax = plt.gca().get_xlim()
         self.xmin_textbox.delete(0, END)
         self.xmax_textbox.delete(0, END)
@@ -507,10 +544,95 @@ class BViewer:
         self.yaxis_name_textbox.delete(0, END)
         self.yaxis_name_textbox.insert(0, ylabel_name)
 
-        xticks_list = plt.gca().xaxis.major.formatter.locs
-        xticks = xticks_list[1] - xticks_list[0]
+        xmajor_list = plt.gca().xaxis.major.formatter.locs
+        xmajor = xmajor_list[1] - xmajor_list[0]
         self.xmajor_textbox.delete(0, END)
-        self.xmajor_textbox.insert(0, xticks)
+        self.xmajor_textbox.insert(0, xmajor)
+
+        ymajor_list = plt.gca().yaxis.major.formatter.locs
+        ymajor = ymajor_list[1] - ymajor_list[0]
+        self.ymajor_textbox.delete(0, END)
+        self.ymajor_textbox.insert(0, ymajor)
+
+    def write_current_settings(self, y_axis_name):
+
+        xmin = self.xmin_textbox.get()
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xmin', cfg_value=xmin)
+
+        xmax = self.xmax_textbox.get()
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xmax', cfg_value=xmax)
+
+        xmajor_value = float(self.xmajor_textbox.get())
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xmajor', cfg_value=xmajor_value)
+
+        ymin = self.ymin_textbox.get()
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ymin', cfg_value=ymin)
+
+        ymax = self.ymax_textbox.get()
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ymax', cfg_value=ymax)
+
+        ymajor_value = self.ymajor_textbox.get()
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ymajor', cfg_value=ymajor_value)
+
+        xlabel_name = self.xaxis_name_textbox.get()
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xlabel', cfg_value=xlabel_name)
+
+        ylabel_name = self.yaxis_name_textbox.get()
+        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ylabel', cfg_value=ylabel_name)
+
+        slider_value = self.filter_slider.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='savgol', cfg_value=slider_value)
+
+        yadd = self.add_textbox.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='yadd', cfg_value=yadd)
+
+        ymult = self.y_mult_textbox.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymult', cfg_value=ymult)
+
+    def read_current_settings(self):
+
+        xmin = self.cur_set.graph_settings_array[self.y_axis_name]['xmin']
+        self.xmin_textbox.delete(0, END)
+        self.xmin_textbox.insert(0, xmin)
+
+        xmax = self.cur_set.graph_settings_array[self.y_axis_name]['xmax']
+        self.xmax_textbox.delete(0, END)
+        self.xmax_textbox.insert(0, xmax)
+
+        xmajor_value = self.cur_set.graph_settings_array[self.y_axis_name]['xmajor']
+        self.xmajor_textbox.delete(0, END)
+        self.xmajor_textbox.insert(0, xmajor_value)
+
+        ymin = self.cur_set.graph_settings_array[self.y_axis_name]['ymin']
+        self.ymin_textbox.delete(0, END)
+        self.ymin_textbox.insert(0, ymin)
+
+        ymax = self.cur_set.graph_settings_array[self.y_axis_name]['ymax']
+        self.ymax_textbox.delete(0, END)
+        self.ymax_textbox.insert(0, ymax)
+
+        ymajor_value = self.cur_set.graph_settings_array[self.y_axis_name]['ymajor']
+        self.ymajor_textbox.delete(0, END)
+        self.ymajor_textbox.insert(0, ymajor_value)
+
+        xlabel_name = self.cur_set.graph_settings_array[self.y_axis_name]['xlabel']
+        self.xaxis_name_textbox.delete(0, END)
+        self.xaxis_name_textbox.insert(0, xlabel_name)
+
+        ylabel_name = self.cur_set.graph_settings_array[self.y_axis_name]['ylabel']
+        self.yaxis_name_textbox.delete(0, END)
+        self.yaxis_name_textbox.insert(0, ylabel_name)
+
+        slider_value = self.cur_set.graph_settings_array[self.y_axis_name]['savgol']
+        self.filter_slider.set(slider_value)
+
+        yadd = self.cur_set.graph_settings_array[self.y_axis_name]['yadd']
+        self.add_textbox.delete(0, END)
+        self.add_textbox.insert(0, yadd)
+
+        ymult = self.cur_set.graph_settings_array[self.y_axis_name]['ymult']
+        self.y_mult_textbox.delete(0, END)
+        self.y_mult_textbox.insert(0, ymult)
 
     def select_file(self):
         filetypes = (
@@ -519,7 +641,7 @@ class BViewer:
         )
 
         self.x_change_status = False
-        self.get_minmax()
+        self.get_minmax_major()
 
         filename = fd.askopenfilename(
             title='Open a file',
@@ -534,7 +656,6 @@ class BViewer:
     def open_with_file(self, file_path):
 
         self.status_label1.config(text="Choose profile...")
-        # filepath = pathlib.Path(filename_path).parent.resolve()
         self.axis_table, self.header_row = self.get_axis_from_file(file_path)
 
     def auto_chart(self):
@@ -546,7 +667,7 @@ class BViewer:
         self.x_mult_textbox.delete(0, END)
         self.x_mult_textbox.insert(0, 1)
         self.plot()
-        self.get_minmax()
+        self.get_minmax_major()
 
     def export_selected(self):
 
@@ -603,7 +724,9 @@ class BViewer:
             self.status_label1.place(x=10, y=5)
             self.status_label1.config(text="Select file...")
             self.open_button.place(x=10, y=35, width=70, height=25)
-            self.export_button.place(x=100, y=35, width=90, height=25)
+            self.export_button.place(x=85, y=35, width=90, height=25)
+            self.language_value_combobox.place(x=185, y=32, width=50, height=30)
+            self.language_variable.set(self.language_options[0])
             self.graphs_listbox.place(x=10, y=70)
             self.xmin_label.place(x=10, y=450)
             self.xmax_label.place(x=80, y=450)
@@ -640,6 +763,7 @@ class BViewer:
                 self.make_graph(x, y, "Sin (x)")
 
             def on_closing():
+                self.cur_set.json_export()
                 self.window.destroy()
                 sys.exit()
 

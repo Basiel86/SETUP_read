@@ -31,7 +31,6 @@ class BViewer:
     magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)',
                           'magnetic intensity (sensors)',
                           'magnetic intensity (wt gauge)', 'magnetization', 'намагниченность', 'magn']
-    names_repeats_list = ["speed", "orientation", "temperature", "magnetization"]
 
     def __init__(self):
 
@@ -50,12 +49,12 @@ class BViewer:
         self.filter_variable = StringVar(self.window)
         self.language_variable = StringVar(self.window)
         self.filter_slider = tkinter.Scale(self.window, from_=0, to=200, orient='horizontal', width=20, length=200,
-                                           command=self.filter_slider_change)
+                                           command=self.change_savgol_slider)
         self.filter_value_combobox = OptionMenu(self.window, self.filter_variable, *self.filter_options,
                                                 command=self.set_filter)
         self.language_options = ["RU", "EN"]
         self.language_value_combobox = OptionMenu(self.window, self.language_variable, *self.language_options,
-                                                  command=self.language_change)
+                                                  command=self.change_language)
         self.filter_value_label = Label(master=self.window, text="Smoothing Value")
         self.yaxis_name_textbox = Entry(master=self.window, width=35)
         self.xaxis_name_textbox = Entry(master=self.window, width=35)
@@ -187,82 +186,6 @@ class BViewer:
                 return True
         return False
 
-    def graph_settings_parse(self, graph_name, y_max):
-        """
-        По названию графика создаем Словарь с характеристиками графика
-        Возращаем пустой если графику не нужны настройки, возьмутся автоматические
-        """
-
-        # https://stackoverflow.com/questions/22408237/named-colors-in-matplotlib
-
-        # darkcyan
-        # darkgoldenrod
-        # maroon
-        # darkslateblue
-        # darkolivegreen
-        # olive
-        # cadetblue
-        # peru
-
-        graph_name = graph_name.lower()
-
-        if self.list_item_in_string(self.speed_list, graph_name):
-            if y_max < 5:
-                ymax = 5
-            else:
-                ymax = self.round_up_custom(y_max, 5)
-
-            graph_settings = {'ymax': ymax,
-                              "ymax_format": '%.1f',
-                              "ymax_base": 0.5,
-                              "ylabel_RU": "Скорость, м/с",
-                              "ylabel_EN": "Speed, m/s",
-                              "color": "darkslateblue"}
-
-            return graph_settings
-        elif self.list_item_in_string(self.temperature_list, graph_name):
-            graph_settings = {'ymax': 100,
-                              "ymax_format": '%.0f',
-                              "ymax_base": 10,
-                              "ylabel_RU": "Температура, °С",
-                              "ylabel_EN": "Temperature, deg",
-                              "color": "firebrick"}
-            return graph_settings
-        elif self.list_item_in_string(self.orientation_list, graph_name):
-            graph_settings = {'ymax': 360,
-                              "ymax_format": '%.0f',
-                              "ymax_base": 30,
-                              "ylabel_RU": "Угловое положение, °",
-                              "ylabel_EN": "Orientation, °",
-                              "color": "darkolivegreen"}
-            return graph_settings
-        elif self.list_item_in_string(self.magnetization_list, graph_name):
-            graph_settings = {'ymax': 40,
-                              "ymax_format": '%.1f',
-                              "ymax_base": 5,
-                              "ylabel_RU": "Намагниченность, кА/м",
-                              "ylabel_EN": "Magnetization, kA/m",
-                              "color": "maroon"}
-            return graph_settings
-        elif self.list_item_in_string(self.pressure_list, graph_name):
-            graph_settings = {'ymax': 10,
-                              "ymax_format": '%.1f',
-                              "ymax_base": 1,
-                              "ylabel_RU": "Давление, МПа",
-                              "ylabel_EN": "Pressure, MPa",
-                              "color": "peru"}
-            return graph_settings
-        elif self.list_item_in_string(self.signal_loss_list, graph_name):
-            graph_settings = {'ymax': 100,
-                              "ymax_format": '%.0f',
-                              "ymax_base": 10,
-                              "ylabel_RU": "Потеря сигнала, %",
-                              "ylabel_EN": "Signal loss, %",
-                              "color": "darkgreen"}
-            return graph_settings
-        else:
-            return {}
-
     @staticmethod
     def round_up_custom(num, step):
         """
@@ -320,18 +243,17 @@ class BViewer:
             x2, y2 = [0, self.round_up_custom(max(x_axis), 100)], [30, 30]
             self.ax.plot(x2, y2, color=colors['blue'], linewidth=2)
 
-        graph_settings = self.graph_settings_parse(graph_name, max(y_axis))
+        graph_settings = self.cur_set.graphs_list[graph_name]
         self.ax.grid()
         plt.xlim(0)
         plt.ylim(0)
 
         lang = self.language_variable.get()
-        if lang == "RU":
-            plt.xlabel('Дистанция от камеры запуска, м', labelpad=8,
-                       font={'family': 'sans', 'weight': 'bold', 'size': 18})
+        if self.y_axis_name != "":
+            plt.xlabel("", labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
+            plt.xlabel(self.cur_set.distance_dict[lang])
         else:
-            plt.xlabel('Distance, m', labelpad=8,
-                       font={'family': 'sans', 'weight': 'bold', 'size': 18})
+            plt.xlabel(graph_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
 
         plt.ylabel(graph_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
 
@@ -363,14 +285,15 @@ class BViewer:
 
         if graph_settings != {}:
             # Максимальное значение графика
+
             self.ax.set_ylim(ymin=0, ymax=graph_settings['ymax'])
             # Локатор с фиксированным шагом
-            self.ax.yaxis.set_major_locator(MultipleLocator(base=graph_settings['ymax_base']))
+            self.ax.yaxis.set_major_locator(MultipleLocator(base=graph_settings['ymajor']))
             # Формат оси
             self.ax.yaxis.set_major_formatter(FormatStrFormatter(graph_settings['ymax_format']))
             # Лэйбл оси
             lang = self.language_variable.get()
-            plt.ylabel(graph_settings[f'ylabel_{lang}'], labelpad=10,
+            plt.ylabel(graph_settings[f'ylabel_{graph_settings["lang"]}'], labelpad=10,
                        font={'family': 'sans', 'weight': 'bold', 'size': 18})
             # Меняем цвет графика
             plt.gca().get_lines()[0].set_color(graph_settings['color'])
@@ -382,72 +305,79 @@ class BViewer:
 
         self.canvas.draw()
 
-    def plot_event(self, event):
-        try:
-            if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
-                self.filter_slider.set(0)
-                self.plot()
-                self.get_minmax_major()
-                self.status_label1.config(text=self.y_axis_name)
+    def graph_update(self):
+        self.ax.plot(self.x_axis, self.y_axis)
+        self.canvas.draw()
 
-        except Exception as ex:
-            print('plot_event' + str(ex))
+    def plot_event(self, event):
+        # try:
+        if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
+            #self.filter_slider.set(0)
+
+            self.form_update_current_settings()
+            self.plot()
+            self.get_minmax_major_from_graph()
+            self.write_current_settings()
+            self.status_label1.config(text=self.y_axis_name)
+
+    # except Exception as ex:
+    #   print('plot_event' + str(ex))
 
     def plot(self):
 
-        try:
-            self.x_axis_name = "Distance"
+        # try:
+        self.x_axis_name = "Distance"
 
-            if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
-                for i in self.graphs_listbox.curselection():
-                    self.y_axis_name = self.graphs_listbox.get(i)
+        if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
+            for i in self.graphs_listbox.curselection():
+                self.y_axis_name = self.graphs_listbox.get(i)
 
-            if self.x_axis_name not in self.header_row:
-                raise ResourceWarning("Дистанция не найдена")
+        if self.x_axis_name not in self.header_row:
+            raise ResourceWarning("Дистанция не найдена")
 
-            x_index = np.argwhere(self.header_row == self.x_axis_name)[0][0]
-            y_index = np.argwhere(self.header_row == self.y_axis_name)[0][0]
+        x_index = np.argwhere(self.header_row == self.x_axis_name)[0][0]
+        y_index = np.argwhere(self.header_row == self.y_axis_name)[0][0]
 
-            self.x_axis = self.axis_table[:, x_index]
-            self.y_axis = self.axis_table[:, y_index]
+        self.x_axis = self.axis_table[:, x_index]
+        self.y_axis = self.axis_table[:, y_index]
 
-            # Домножение давления
-            if self.list_item_in_string(self.pressure_list, self.y_axis_name.lower()):
-                self.y_axis = self.y_axis / 9.869
+        # Домножение давления
+        if self.list_item_in_string(self.pressure_list, self.y_axis_name.lower()):
+            self.y_axis = self.y_axis / 9.869
 
-            self.y_axis = self.y_axis * float(self.y_mult_textbox.get()) + float(self.add_textbox.get())
+        self.y_axis = self.y_axis * float(self.y_mult_textbox.get()) + float(self.add_textbox.get())
 
-            # savgol_value = filter_variable.get()
-            #
-            # filter_options_list = {"no filter": 3,
-            #                        "SAVG light": 33,
-            #                        "SAVG medium": 333,
-            #                        "SAVG heavy": 667}
+        # savgol_value = filter_variable.get()
+        #
+        # filter_options_list = {"no filter": 3,
+        #                        "SAVG light": 33,
+        #                        "SAVG medium": 333,
+        #                        "SAVG heavy": 667}
 
-            self.savgol_value = self.get_filter_slieder()
-            self.y_axis_filter = savgol_filter(self.y_axis, window_length=self.savgol_value, polyorder=2)
-            self.x_axis_mult = self.x_axis * float(self.x_mult_textbox.get())
+        self.savgol_value = self.get_filter_slieder()
+        self.y_axis_filter = savgol_filter(self.y_axis, window_length=self.savgol_value, polyorder=2)
+        self.x_axis_mult = self.x_axis * float(self.x_mult_textbox.get())
 
-            # if savgol_value in filter_options_list:
-            #     savgol_value = filter_options_list[savgol_value]
-            #     y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
+        # if savgol_value in filter_options_list:
+        #     savgol_value = filter_options_list[savgol_value]
+        #     y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
 
-            x_axis_min_value = round(np.min(self.x_axis), 1)
-            x_axis_max_value = round(np.max(self.x_axis), 1)
-            y_axis_min_value = round(np.min(self.y_axis), 1)
-            y_axis_max_value = round(np.max(self.y_axis), 1)
-            y_axis_average_value = round(np.average(self.y_axis), 2)
+        x_axis_min_value = round(np.min(self.x_axis), 1)
+        x_axis_max_value = round(np.max(self.x_axis), 1)
+        y_axis_min_value = round(np.min(self.y_axis), 1)
+        y_axis_max_value = round(np.max(self.y_axis), 1)
+        y_axis_average_value = round(np.average(self.y_axis), 2)
 
-            self.status_label2.config(text=f"Average={y_axis_average_value}\n\n"
-                                           f"XMIN={x_axis_min_value} : "
-                                           f"XMAX={x_axis_max_value}\n"
-                                           f"YMIN={y_axis_min_value} : "
-                                           f"YMAX={y_axis_max_value}", anchor='w')
+        self.status_label2.config(text=f"Average={y_axis_average_value}\n\n"
+                                       f"XMIN={x_axis_min_value} : "
+                                       f"XMAX={x_axis_max_value}\n"
+                                       f"YMIN={y_axis_min_value} : "
+                                       f"YMAX={y_axis_max_value}", anchor='w')
 
-            self.make_graph(self.x_axis_mult, self.y_axis_filter, self.y_axis_name)
+        self.make_graph(self.x_axis_mult, self.y_axis_filter, self.y_axis_name)
 
-        except Exception as ex:
-            print('plot: ' + str(ex))
+    # except Exception as ex:
+    #    print('plot: ' + str(ex))
 
     def set_xminmax_no_event(self):
         self.x_change_status = True
@@ -456,14 +386,14 @@ class BViewer:
             xmax = float(self.xmax_textbox.get())
             self.ax.set_xlim(xmin=xmin, xmax=xmax)
 
-    def set_xminmax(self, event=None):
+    def set_xminmax(self, event):
         self.x_change_status = True
         if self.xmin_textbox.get() != "" and self.xmax_textbox.get() != 0:
             xmin = float(self.xmin_textbox.get())
             xmax = float(self.xmax_textbox.get())
             self.ax.set_xlim(xmin=xmin, xmax=xmax)
-
-        self.canvas.draw()
+            self.write_current_settings()
+            self.canvas.draw()
 
     def set_xmajor_no_event(self):
         if self.xmajor_textbox.get() != "":
@@ -471,43 +401,59 @@ class BViewer:
             self.ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
             self.x_change_status = True
 
-    def set_xmajor(self, event=None):
+
+    def set_xmajor(self, event):
         if self.xmajor_textbox.get() != "":
             xmajor_value = float(self.xmajor_textbox.get())
             self.ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
             self.x_change_status = True
+            self.write_current_settings()
             self.canvas.draw()
 
-    def set_yminmax(self, event=None):
+    def set_ymajor(self, event):
+        ymajor_value = float(self.ymajor_textbox.get())
+        self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor_value))
+        self.write_current_settings()
+        self.canvas.draw()
+
+    def set_yminmax(self, event):
         if self.ymin_textbox.get() != "" and self.ymax_textbox.get() != 0:
             ymin = float(self.ymin_textbox.get())
             ymax = float(self.ymax_textbox.get())
             self.ax.set_ylim(ymin=ymin, ymax=ymax)
-
-        self.canvas.draw()
+            self.write_current_settings()
+            self.canvas.draw()
 
     def set_xlabel_name(self, event=None):
         xlabel_name = self.xaxis_name_textbox.get()
         plt.xlabel(xlabel_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
+        self.write_current_settings()
         self.canvas.draw()
 
     def set_ylabel_name(self, event=None):
         ylabel_name = self.yaxis_name_textbox.get()
         plt.ylabel(ylabel_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
+        self.write_current_settings()
         self.canvas.draw()
 
     def set_filter(self, event):
         if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
             self.plot()
-            self.get_minmax_major()
+            self.graph_update()
+            # self.get_minmax_major()
+            self.form_update_current_settings()
 
-    def language_change(self, event):
+    def change_language(self, event):
         self.plot()
 
-    def filter_slider_change(self, event):
+    def change_savgol_slider(self, event):
+
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="savgol",
+                                            cfg_value=event)  # self.filter_slider.get())
         self.plot()
-        self.get_minmax_major()
-        self.write_current_settings()
+        # self.get_minmax_major()
+        # self.write_current_settings(self.y_axis_name)
+        # self.form_update_current_settings()
 
     def get_filter_slieder(self):
         slider_value = self.filter_slider.get() + 3
@@ -518,12 +464,9 @@ class BViewer:
 
         return slider_value
 
-    def set_ymajor(self, event):
-        ymajor_value = float(self.ymajor_textbox.get())
-        self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor_value))
-        self.canvas.draw()
 
-    def get_minmax_major(self):
+
+    def get_minmax_major_from_graph(self):
         xmin, xmax = plt.gca().get_xlim()
         self.xmin_textbox.delete(0, END)
         self.xmax_textbox.delete(0, END)
@@ -554,31 +497,32 @@ class BViewer:
         self.ymajor_textbox.delete(0, END)
         self.ymajor_textbox.insert(0, ymajor)
 
-    def write_current_settings(self, y_axis_name):
+    def write_current_settings(self):
 
         xmin = self.xmin_textbox.get()
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xmin', cfg_value=xmin)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmin', cfg_value=xmin)
 
         xmax = self.xmax_textbox.get()
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xmax', cfg_value=xmax)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmax', cfg_value=xmax)
 
-        xmajor_value = float(self.xmajor_textbox.get())
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xmajor', cfg_value=xmajor_value)
+        if self.xmajor_textbox.get() != "":
+            xmajor_value = float(self.xmajor_textbox.get())
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmajor', cfg_value=xmajor_value)
 
         ymin = self.ymin_textbox.get()
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ymin', cfg_value=ymin)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymin', cfg_value=ymin)
 
         ymax = self.ymax_textbox.get()
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ymax', cfg_value=ymax)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymax', cfg_value=ymax)
 
         ymajor_value = self.ymajor_textbox.get()
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ymajor', cfg_value=ymajor_value)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymajor', cfg_value=ymajor_value)
 
         xlabel_name = self.xaxis_name_textbox.get()
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='xlabel', cfg_value=xlabel_name)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xlabel', cfg_value=xlabel_name)
 
         ylabel_name = self.yaxis_name_textbox.get()
-        self.cur_set.write_current_settings(graph_name=y_axis_name, cfg_name='ylabel', cfg_value=ylabel_name)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ylabel', cfg_value=ylabel_name)
 
         slider_value = self.filter_slider.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='savgol', cfg_value=slider_value)
@@ -589,50 +533,53 @@ class BViewer:
         ymult = self.y_mult_textbox.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymult', cfg_value=ymult)
 
-    def read_current_settings(self):
+    def form_update_current_settings(self):
 
-        xmin = self.cur_set.graph_settings_array[self.y_axis_name]['xmin']
-        self.xmin_textbox.delete(0, END)
-        self.xmin_textbox.insert(0, xmin)
+        if self.y_axis_name != "":
+            lang = self.cur_set.graphs_list[self.y_axis_name]['lang']
 
-        xmax = self.cur_set.graph_settings_array[self.y_axis_name]['xmax']
-        self.xmax_textbox.delete(0, END)
-        self.xmax_textbox.insert(0, xmax)
+            xmin = self.cur_set.graphs_list[self.y_axis_name]['xmin']
+            self.xmin_textbox.delete(0, END)
+            self.xmin_textbox.insert(0, xmin)
 
-        xmajor_value = self.cur_set.graph_settings_array[self.y_axis_name]['xmajor']
-        self.xmajor_textbox.delete(0, END)
-        self.xmajor_textbox.insert(0, xmajor_value)
+            xmax = self.cur_set.graphs_list[self.y_axis_name]['xmax']
+            self.xmax_textbox.delete(0, END)
+            self.xmax_textbox.insert(0, xmax)
 
-        ymin = self.cur_set.graph_settings_array[self.y_axis_name]['ymin']
-        self.ymin_textbox.delete(0, END)
-        self.ymin_textbox.insert(0, ymin)
+            xmajor_value = self.cur_set.graphs_list[self.y_axis_name]['xmajor']
+            self.xmajor_textbox.delete(0, END)
+            self.xmajor_textbox.insert(0, xmajor_value)
 
-        ymax = self.cur_set.graph_settings_array[self.y_axis_name]['ymax']
-        self.ymax_textbox.delete(0, END)
-        self.ymax_textbox.insert(0, ymax)
+            ymin = self.cur_set.graphs_list[self.y_axis_name]['ymin']
+            self.ymin_textbox.delete(0, END)
+            self.ymin_textbox.insert(0, ymin)
 
-        ymajor_value = self.cur_set.graph_settings_array[self.y_axis_name]['ymajor']
-        self.ymajor_textbox.delete(0, END)
-        self.ymajor_textbox.insert(0, ymajor_value)
+            ymax = self.cur_set.graphs_list[self.y_axis_name]['ymax']
+            self.ymax_textbox.delete(0, END)
+            self.ymax_textbox.insert(0, ymax)
 
-        xlabel_name = self.cur_set.graph_settings_array[self.y_axis_name]['xlabel']
-        self.xaxis_name_textbox.delete(0, END)
-        self.xaxis_name_textbox.insert(0, xlabel_name)
+            ymajor_value = self.cur_set.graphs_list[self.y_axis_name]['ymajor']
+            self.ymajor_textbox.delete(0, END)
+            self.ymajor_textbox.insert(0, ymajor_value)
 
-        ylabel_name = self.cur_set.graph_settings_array[self.y_axis_name]['ylabel']
-        self.yaxis_name_textbox.delete(0, END)
-        self.yaxis_name_textbox.insert(0, ylabel_name)
+            xlabel_name = self.cur_set.graphs_list[self.y_axis_name][f'xlabel_{lang}']
+            self.xaxis_name_textbox.delete(0, END)
+            self.xaxis_name_textbox.insert(0, xlabel_name)
 
-        slider_value = self.cur_set.graph_settings_array[self.y_axis_name]['savgol']
-        self.filter_slider.set(slider_value)
+            ylabel_name = self.cur_set.graphs_list[self.y_axis_name][f'ylabel_{lang}']
+            self.yaxis_name_textbox.delete(0, END)
+            self.yaxis_name_textbox.insert(0, ylabel_name)
 
-        yadd = self.cur_set.graph_settings_array[self.y_axis_name]['yadd']
-        self.add_textbox.delete(0, END)
-        self.add_textbox.insert(0, yadd)
+            slider_value = self.cur_set.graphs_list[self.y_axis_name]['savgol']
+            self.filter_slider.set(slider_value)
 
-        ymult = self.cur_set.graph_settings_array[self.y_axis_name]['ymult']
-        self.y_mult_textbox.delete(0, END)
-        self.y_mult_textbox.insert(0, ymult)
+            yadd = self.cur_set.graphs_list[self.y_axis_name]['yadd']
+            self.add_textbox.delete(0, END)
+            self.add_textbox.insert(0, yadd)
+
+            ymult = self.cur_set.graphs_list[self.y_axis_name]['ymult']
+            self.y_mult_textbox.delete(0, END)
+            self.y_mult_textbox.insert(0, ymult)
 
     def select_file(self):
         filetypes = (
@@ -641,7 +588,8 @@ class BViewer:
         )
 
         self.x_change_status = False
-        self.get_minmax_major()
+        # self.get_minmax_major()
+        self.form_update_current_settings()
 
         filename = fd.askopenfilename(
             title='Open a file',
@@ -667,7 +615,8 @@ class BViewer:
         self.x_mult_textbox.delete(0, END)
         self.x_mult_textbox.insert(0, 1)
         self.plot()
-        self.get_minmax_major()
+        # self.get_minmax_major()
+        self.form_update_current_settings()
 
     def export_selected(self):
 

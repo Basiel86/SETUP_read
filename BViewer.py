@@ -15,6 +15,7 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)
 import curren_settings_class as cs
 import matplotlib.pyplot as plt
+import sys
 
 
 class BViewer:
@@ -22,6 +23,7 @@ class BViewer:
     header_item = ''
     export_path = ''
     x_change_status = False
+    y_change_status = False
 
     temperature_list = ['temperature', 'температура', 'temp']
     speed_list = ['speed', 'скорость']
@@ -60,8 +62,8 @@ class BViewer:
         self.xaxis_name_textbox = Entry(master=self.window, width=35)
         self.yaxis_name_label = Label(master=self.window, text="Y Axis Name")
         self.xaxis_name_label = Label(master=self.window, text="X Axis Name")
-        self.x_mult_textbox = Entry(master=self.window, width=10)
-        self.x_mult_label = Label(master=self.window, text="X Mult")
+        self.x_desire_textbox = Entry(master=self.window, width=15)
+        self.x_desire_label = Label(master=self.window, text="X Desire")
         self.y_mult_textbox = Entry(master=self.window, width=10)
         self.y_mult_label = Label(master=self.window, text="Y Mult")
         self.add_textbox = Entry(master=self.window, width=10)
@@ -248,10 +250,9 @@ class BViewer:
         plt.xlim(0)
         plt.ylim(0)
 
-        lang = self.language_variable.get()
         if self.y_axis_name != "":
             plt.xlabel("", labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
-            plt.xlabel(self.cur_set.distance_dict[lang])
+            plt.xlabel(self.cur_set.graphs_list[self.y_axis_name][f'xlabel_{self.language_variable.get()}'])
         else:
             plt.xlabel(graph_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
 
@@ -272,7 +273,7 @@ class BViewer:
         for label in self.ax.yaxis.get_majorticklabels():
             label.set_transform(label.get_transform() + offsetY)
 
-        if self.x_change_status is False:
+        if self.x_change_status == False:
             self.ax.set_xlim(xmin=0, xmax=self.round_up_custom(max(x_axis), 100))
             self.ax.xaxis.set_major_locator(MaxNLocator())
             self.ax.xaxis.set_major_formatter(FormatStrFormatter('%.0f'))
@@ -285,10 +286,15 @@ class BViewer:
 
         if graph_settings != {}:
             # Максимальное значение графика
+            ymax = graph_settings['ymax']
+            if ymax != 0:
+                self.ax.set_ylim(ymin=0, ymax=ymax)
+                # Локатор с фиксированным шагом
+                self.ax.yaxis.set_major_locator(MultipleLocator(base=graph_settings['ymajor']))
+            else:
+                self.ax.set_ylim(ymin=0, ymax=self.round_up_custom(max(y_axis), 1))
+                self.ax.yaxis.set_major_locator(MaxNLocator())
 
-            self.ax.set_ylim(ymin=0, ymax=graph_settings['ymax'])
-            # Локатор с фиксированным шагом
-            self.ax.yaxis.set_major_locator(MultipleLocator(base=graph_settings['ymajor']))
             # Формат оси
             self.ax.yaxis.set_major_formatter(FormatStrFormatter(graph_settings['ymax_format']))
             # Лэйбл оси
@@ -311,10 +317,13 @@ class BViewer:
 
     def plot_event(self, event):
         # try:
-        if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
-            #self.filter_slider.set(0)
 
+        if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
+            for i in self.graphs_listbox.curselection():
+                self.y_axis_name = self.graphs_listbox.get(i)
+            # self.filter_slider.set(0)
             self.form_update_current_settings()
+
             self.plot()
             self.get_minmax_major_from_graph()
             self.write_current_settings()
@@ -347,17 +356,6 @@ class BViewer:
 
         self.y_axis = self.y_axis * float(self.y_mult_textbox.get()) + float(self.add_textbox.get())
 
-        # savgol_value = filter_variable.get()
-        #
-        # filter_options_list = {"no filter": 3,
-        #                        "SAVG light": 33,
-        #                        "SAVG medium": 333,
-        #                        "SAVG heavy": 667}
-
-        self.savgol_value = self.get_filter_slieder()
-        self.y_axis_filter = savgol_filter(self.y_axis, window_length=self.savgol_value, polyorder=2)
-        self.x_axis_mult = self.x_axis * float(self.x_mult_textbox.get())
-
         # if savgol_value in filter_options_list:
         #     savgol_value = filter_options_list[savgol_value]
         #     y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
@@ -368,11 +366,23 @@ class BViewer:
         y_axis_max_value = round(np.max(self.y_axis), 1)
         y_axis_average_value = round(np.average(self.y_axis), 2)
 
+        self.savgol_value = self.get_filter_slieder()
+        self.y_axis_filter = savgol_filter(self.y_axis, window_length=self.savgol_value, polyorder=2)
+
+        x_desire = float(self.x_desire_textbox.get())
+        if x_desire > 1:
+            desire_coeff = float(self.x_desire_textbox.get()) / x_axis_max_value
+        else:
+            desire_coeff = 1
+        self.x_axis_mult = self.x_axis * desire_coeff
+
+        y_axis_max_mult_value = round(np.max(self.x_axis_mult), 1)
+
         self.status_label2.config(text=f"Average={y_axis_average_value}\n\n"
-                                       f"XMIN={x_axis_min_value} : "
-                                       f"XMAX={x_axis_max_value}\n"
-                                       f"YMIN={y_axis_min_value} : "
-                                       f"YMAX={y_axis_max_value}", anchor='w')
+                                       f"X-MIN={x_axis_min_value} : "
+                                       f"X-MAX={x_axis_max_value}\n"
+                                       f"Y-MIN={y_axis_min_value} : "
+                                       f"Y-MAX={y_axis_max_value}", anchor='w')
 
         self.make_graph(self.x_axis_mult, self.y_axis_filter, self.y_axis_name)
 
@@ -385,6 +395,9 @@ class BViewer:
             xmin = float(self.xmin_textbox.get())
             xmax = float(self.xmax_textbox.get())
             self.ax.set_xlim(xmin=xmin, xmax=xmax)
+            self.cur_set.set_x_min_max_all(xmin=xmin, xmax=xmax)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmin', cfg_value=xmin)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmax', cfg_value=xmax)
 
     def set_xminmax(self, event):
         self.x_change_status = True
@@ -392,48 +405,61 @@ class BViewer:
             xmin = float(self.xmin_textbox.get())
             xmax = float(self.xmax_textbox.get())
             self.ax.set_xlim(xmin=xmin, xmax=xmax)
-            self.write_current_settings()
+            self.cur_set.set_x_min_max_all(xmin=xmin, xmax=xmax)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmin', cfg_value=xmin)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmax', cfg_value=xmax)
             self.canvas.draw()
+
+    def set_yadd(self, event):
+        yadd = self.add_textbox.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='yadd', cfg_value=yadd)
+        self.plot()
 
     def set_xmajor_no_event(self):
         if self.xmajor_textbox.get() != "":
             xmajor_value = float(self.xmajor_textbox.get())
             self.ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
-            self.x_change_status = True
-
+            self.cur_set.set_x_major_all(xmajor=xmajor_value)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmajor', cfg_value=xmajor_value)
 
     def set_xmajor(self, event):
         if self.xmajor_textbox.get() != "":
             xmajor_value = float(self.xmajor_textbox.get())
             self.ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
-            self.x_change_status = True
-            self.write_current_settings()
+            self.cur_set.set_x_major_all(xmajor=xmajor_value)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmajor', cfg_value=xmajor_value)
+            self.canvas.draw()
+
+    def set_yminmax(self, event):
+        self.y_change_status = True
+        if self.ymin_textbox.get() != "" and self.ymax_textbox.get() != 0:
+            ymin = float(self.ymin_textbox.get())
+            ymax = float(self.ymax_textbox.get())
+            self.ax.set_ylim(ymin=ymin, ymax=ymax)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymin', cfg_value=ymin)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymax', cfg_value=ymax)
             self.canvas.draw()
 
     def set_ymajor(self, event):
         ymajor_value = float(self.ymajor_textbox.get())
         self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor_value))
-        self.write_current_settings()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymajor', cfg_value=ymajor_value)
         self.canvas.draw()
 
-    def set_yminmax(self, event):
-        if self.ymin_textbox.get() != "" and self.ymax_textbox.get() != 0:
-            ymin = float(self.ymin_textbox.get())
-            ymax = float(self.ymax_textbox.get())
-            self.ax.set_ylim(ymin=ymin, ymax=ymax)
-            self.write_current_settings()
-            self.canvas.draw()
-
-    def set_xlabel_name(self, event=None):
+    def set_xlabel_name(self, event):
+        lang = self.cur_set.graphs_list[self.y_axis_name]['lang']
         xlabel_name = self.xaxis_name_textbox.get()
         plt.xlabel(xlabel_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
-        self.write_current_settings()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name=f'xlabel_{lang}',
+                                            cfg_value=xlabel_name)
         self.canvas.draw()
 
-    def set_ylabel_name(self, event=None):
+    def set_ylabel_name(self, event):
+        lang = self.cur_set.graphs_list[self.y_axis_name]['lang']
         ylabel_name = self.yaxis_name_textbox.get()
         plt.ylabel(ylabel_name, labelpad=8, font={'family': 'sans', 'weight': 'bold', 'size': 18})
-        self.write_current_settings()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name=f'ylabel_{lang}',
+                                            cfg_value=ylabel_name)
         self.canvas.draw()
 
     def set_filter(self, event):
@@ -443,7 +469,25 @@ class BViewer:
             # self.get_minmax_major()
             self.form_update_current_settings()
 
+    def set_ymult(self, event):
+        ymult = self.y_mult_textbox.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="ymult", cfg_value=ymult)
+        self.plot()
+
+    def set_xmult(self, event):
+        xmult_desire = self.x_desire_textbox.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="xmult_desire",
+                                            cfg_value=xmult_desire)
+        self.x_change_status = False
+        self.plot()
+        self.get_minmax_major_from_graph()
+        self.write_current_settings()
+
     def change_language(self, event):
+        lang = self.language_variable.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='lang',
+                                            cfg_value=lang)
+        self.form_update_current_settings()
         self.plot()
 
     def change_savgol_slider(self, event):
@@ -463,8 +507,6 @@ class BViewer:
             self.filter_slider.set(slider_value - 3)
 
         return slider_value
-
-
 
     def get_minmax_major_from_graph(self):
         xmin, xmax = plt.gca().get_xlim()
@@ -612,8 +654,8 @@ class BViewer:
         self.add_textbox.insert(0, 0)
         self.y_mult_textbox.delete(0, END)
         self.y_mult_textbox.insert(0, 1)
-        self.x_mult_textbox.delete(0, END)
-        self.x_mult_textbox.insert(0, 1)
+        self.x_desire_textbox.delete(0, END)
+        self.x_desire_textbox.insert(0, 1)
         self.plot()
         # self.get_minmax_major()
         self.form_update_current_settings()
@@ -659,11 +701,11 @@ class BViewer:
             self.xmajor_textbox.bind('<Return>', self.set_xmajor)
             self.ymajor_textbox.bind('<Return>', self.set_ymajor)
             self.add_textbox.insert(0, "0")
-            self.add_textbox.bind('<Return>', self.plot_event)
+            self.add_textbox.bind('<Return>', self.set_yadd)
             self.y_mult_textbox.insert(0, "1")
-            self.y_mult_textbox.bind('<Return>', self.plot_event)
-            self.x_mult_textbox.insert(0, "1")
-            self.x_mult_textbox.bind('<Return>', self.plot_event)
+            self.y_mult_textbox.bind('<Return>', self.set_ymult)
+            self.x_desire_textbox.insert(0, "1")
+            self.x_desire_textbox.bind('<Return>', self.set_xmult)
             self.xaxis_name_textbox.bind('<Return>', self.set_xlabel_name)
             self.yaxis_name_textbox.bind('<Return>', self.set_ylabel_name)
             self.filter_variable.set(self.filter_options[0])
@@ -698,8 +740,8 @@ class BViewer:
             self.add_textbox.place(x=10, y=641)
             self.y_mult_label.place(x=80, y=620)
             self.y_mult_textbox.place(x=80, y=641)
-            self.x_mult_label.place(x=150, y=620)
-            self.x_mult_textbox.place(x=150, y=641)
+            self.x_desire_label.place(x=150, y=620)
+            self.x_desire_textbox.place(x=150, y=641)
 
             try:
                 open_with_path = str(sys.argv[1])

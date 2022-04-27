@@ -1,3 +1,4 @@
+import hashlib
 import math
 import tkinter
 import numpy as np
@@ -62,7 +63,7 @@ class BViewer:
         self.xaxis_name_textbox = Entry(master=self.window, width=35)
         self.yaxis_name_label = Label(master=self.window, text="Y Axis Name")
         self.xaxis_name_label = Label(master=self.window, text="X Axis Name")
-        self.x_desire_textbox = Entry(master=self.window, width=15)
+        self.x_desire_textbox = Entry(master=self.window, width=12)
         self.x_desire_label = Label(master=self.window, text="X Desire")
         self.y_mult_textbox = Entry(master=self.window, width=10)
         self.y_mult_label = Label(master=self.window, text="Y Mult")
@@ -166,7 +167,8 @@ class BViewer:
         if header_row[0] == '':
             header_row = np.delete(header_row, 0)
 
-        self.cur_set.write_graphs(header_row=header_row, filename=filename)
+        md5_val = self.md5(filename=filename)
+        self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val)
         # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
         print(header_row)
@@ -176,6 +178,14 @@ class BViewer:
             self.graphs_listbox.insert(END, graph_name)
 
         return axis_array, header_row
+
+    @staticmethod
+    def md5(filename):
+        hash_md5 = hashlib.md5()
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
 
     @staticmethod
     def list_item_in_string(base_list, search_in_string):
@@ -656,6 +666,7 @@ class BViewer:
         self.y_mult_textbox.insert(0, 1)
         self.x_desire_textbox.delete(0, END)
         self.x_desire_textbox.insert(0, 1)
+        self.write_current_settings()
         self.plot()
         # self.get_minmax_major()
         self.form_update_current_settings()
@@ -745,10 +756,10 @@ class BViewer:
 
             try:
                 open_with_path = str(sys.argv[1])
-                print("sys path - " + open_with_path)
+                # print("sys path - " + open_with_path)
                 self.open_with_file(open_with_path)
             except Exception as ex:
-                print("sys path error: " + str(ex))
+                # print("sys path error: " + str(ex))
                 x = np.linspace(0, 300, 150)
                 y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
                 self.make_graph(x, y, "Sin (x)")

@@ -1,10 +1,16 @@
 import json
 import copy
+import os
+import sys
+
+from cryptography.fernet import Fernet
 
 
 class CurrentSettings:
+    # дериктория сохранения файлов
+    cfg_dir = os.path.dirname(__file__) + "/CFGs"
     graphs_list = {}
-
+    file_info = {"filename": "", "md5": ""}
     temperature_list = ['temperature', 'температура', 'temp']
     speed_list = ['speed', 'скорость']
     signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
@@ -37,7 +43,11 @@ class CurrentSettings:
 
     def __init__(self):
         self.graphs_list = {}
-        self.write_graphs(["Sin (x)"])
+        self.write_graphs(["Sin (x)"], filename="demo", md5="123")
+
+        # если папки нет - создаем
+        if not os.path.exists(self.cfg_dir):
+            os.makedirs(self.cfg_dir)
 
         # дериктория сохранения файлов
         # save_dir = os.path.dirname(__file__) + "/Json"
@@ -48,10 +58,13 @@ class CurrentSettings:
         # with open(f"{file_path}.json", "w", encoding='utf-8') as outfile:
         #     outfile.write(json_string)
 
-    def write_graphs(self, header_row, filename="tmp"):
+    def write_graphs(self, header_row, filename, md5):
         """
         Инициализируем настройки всех графиков получви Список
         """
+        self.filename = filename
+        self.md5 = md5
+
         for graph_name in header_row:
             self.graphs_list[graph_name] = copy.deepcopy(self.graph_settings_array)
             self.presets_apply(graph_name=graph_name)
@@ -62,6 +75,13 @@ class CurrentSettings:
                 self.write_current_settings(graph_name=graph_name, cfg_name="xlabel_RU",
                                             cfg_value="Дистанция от камеры запуска, м")
                 self.write_current_settings(graph_name=graph_name, cfg_name="xlabel_EN", cfg_value="Distance, m")
+
+        self.file_info["filename"] = filename
+        self.file_info["md5"] = md5
+
+        self.graphs_list["file_info"] = self.file_info
+        if filename != "demo":
+            print("CFG exists - ", self.check_cfg_exist())
 
     def get_current_settings(self, graph_name):
         return self.graphs_list[graph_name]
@@ -85,13 +105,33 @@ class CurrentSettings:
         except ValueError:
             self.graphs_list[graph_name][cfg_name] = cfg_value
 
+    def check_cfg_exist(self):
+        for filename in os.listdir(self.cfg_dir):
+            if f'{self.file_info["filename"]}.json' == filename:
+                print(self.read_json(json_filename=filename))
+                return True
+        return False
+
+    def read_json(self, json_filename):
+        json_path = os.path.join(self.cfg_dir, json_filename)
+        with open(json_path, encoding='utf-8') as json_file:
+            data = json.load(json_file)
+            return data
+            # print("Json file:")
+            # print(data['ylabel'])
+
     def json_export(self):
         """
         Экспортируем в Json файл весь массив
         """
+
         json_string = json.dumps(self.graphs_list, indent=5)
-        with open("Settings.json", "w", encoding='utf-8') as outfile:
-            outfile.write(json_string)
+
+        filename = self.file_info["filename"]
+        if filename != "demo1":
+            with open(f"{os.path.join(self.cfg_dir, filename)}.json", "w", encoding='utf-8') as outfile:
+                outfile.write(json_string)
+            # encrypt(f"{os.path.join(self.cfg_dir, filename)}.json",load_key())
 
     def presets_apply(self, graph_name):
         """
@@ -176,3 +216,39 @@ class CurrentSettings:
                               "ymajor": 10.0,
                               "color": "darkgreen"}
             self.graphs_list[graph_name].update(graph_settings)
+
+
+def write_key():
+    # Создаем ключ и сохраняем его в файл
+    key = Fernet.generate_key()
+    with open('crypto.key', 'wb') as key_file:
+        key_file.write(key)
+
+
+def load_key():
+    # Загружаем ключ 'crypto.key' из текущего каталога
+    return open('cryptotoken.key', 'rb').read()
+
+
+def encrypt(filename, key):
+    # Зашифруем файл и записываем его
+    f = Fernet(key)
+    with open(filename, 'rb') as file:
+        # прочитать все данные файла
+        file_data = file.read()
+        encrypted_data = f.encrypt(file_data)
+        with open(f"{filename}", 'wb') as file:
+            file.write(encrypted_data)
+
+
+def decrypt(filename, key):
+    # Расшифруем файл и записываем его
+    f = Fernet(key)
+    with open(filename, 'rb') as file:
+        # читать зашифрованные данные
+        encrypted_data = file.read()
+    # расшифровать данные
+    decrypted_data = f.decrypt(encrypted_data)
+    # записать оригинальный файл
+    with open(filename, 'wb') as file:
+        file.write(decrypted_data)

@@ -2,6 +2,7 @@ import json
 import copy
 import os
 import sys
+import types
 
 from cryptography.fernet import Fernet
 
@@ -81,7 +82,7 @@ class CurrentSettings:
 
         self.graphs_list["file_info"] = self.file_info
         if filename != "demo":
-            print("CFG exists - ", self.check_cfg_exist())
+            self.check_cfg_exist()
 
     def get_current_settings(self, graph_name):
         return self.graphs_list[graph_name]
@@ -100,17 +101,24 @@ class CurrentSettings:
         Пишем адресно новое значение настроек в классе
         """
         try:
-            cfg_value = float(cfg_value)
-            self.graphs_list[graph_name][cfg_name] = float(cfg_value)
+            if not isinstance(cfg_value, bool):
+                cfg_value = float(cfg_value)
+            self.graphs_list[graph_name][cfg_name] = cfg_value
         except ValueError:
             self.graphs_list[graph_name][cfg_name] = cfg_value
 
     def check_cfg_exist(self):
         for filename in os.listdir(self.cfg_dir):
             if f'{self.file_info["filename"]}.json' == filename:
-                print(self.read_json(json_filename=filename))
-                return True
-        return False
+                filepath = os.path.join(self.cfg_dir, filename)
+                with open(filepath, encoding='utf-8') as json_file:
+                    data = json.load(json_file)
+                    cfg_md5 = data['file_info']['md5']
+                    if cfg_md5 == self.graphs_list['file_info']['md5']:
+                        print("CFG exists")
+                        self.graphs_list.update(data)
+                        return True
+        print("CFG NOT exists")
 
     def read_json(self, json_filename):
         json_path = os.path.join(self.cfg_dir, json_filename)

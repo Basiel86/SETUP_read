@@ -1,10 +1,10 @@
+import types
+
+
 def main():
 
-    txt = "565543"
-
-    x = txt.isnumeric()
-
-    print(x)
+    z = True
+    print(isinstance(z, float))
 
 
 if __name__ == '__main__':

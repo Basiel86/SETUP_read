@@ -171,7 +171,7 @@ class BViewer:
         self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val)
         # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
-        print(header_row)
+        # print(header_row)
 
         self.graphs_listbox.delete(0, END)
         for graph_name in header_row:
@@ -333,7 +333,6 @@ class BViewer:
                 self.y_axis_name = self.graphs_listbox.get(i)
             # self.filter_slider.set(0)
             self.form_update_current_settings()
-
             self.plot()
             self.get_minmax_major_from_graph()
             self.write_current_settings()
@@ -402,6 +401,7 @@ class BViewer:
     def set_xminmax_no_event(self):
         self.x_change_status = True
         if self.xmin_textbox.get() != "" and self.xmax_textbox.get() != 0:
+            self.form_update_current_settings()
             xmin = float(self.xmin_textbox.get())
             xmax = float(self.xmax_textbox.get())
             self.ax.set_xlim(xmin=xmin, xmax=xmax)
@@ -585,6 +585,9 @@ class BViewer:
         ymult = self.y_mult_textbox.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymult', cfg_value=ymult)
 
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='is_changed',
+                                            cfg_value=self.x_change_status)
+
     def form_update_current_settings(self):
 
         if self.y_axis_name != "":
@@ -632,6 +635,8 @@ class BViewer:
             ymult = self.cur_set.graphs_list[self.y_axis_name]['ymult']
             self.y_mult_textbox.delete(0, END)
             self.y_mult_textbox.insert(0, ymult)
+
+            self.x_change_status = self.cur_set.graphs_list[self.y_axis_name]['is_changed']
 
     def select_file(self):
         filetypes = (

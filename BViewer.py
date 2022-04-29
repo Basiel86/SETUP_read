@@ -23,17 +23,6 @@ class BViewer:
     EXP_DAY = '2022-05-15'
     header_item = ''
     export_path = ''
-    x_change_status = False
-    y_change_status = False
-
-    temperature_list = ['temperature', 'температура', 'temp']
-    speed_list = ['speed', 'скорость']
-    signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
-    orientation_list = ['orientation', 'угловое положение', 'угол', 'angle']
-    pressure_list = ['pressure (product)', 'pressure', 'давление']
-    magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)',
-                          'magnetic intensity (sensors)',
-                          'magnetic intensity (wt gauge)', 'magnetization', 'намагниченность', 'magn']
 
     def __init__(self):
 
@@ -91,8 +80,7 @@ class BViewer:
 
         self.cur_set = cs.CurrentSettings()
 
-        self.x_change_status = False
-        self.x_change_status = True
+        self.cur_set.set_x_change_status(False)
         self.file_path = ""
         self.accept_graphs = ['speed', 'orientation', 'temperature', 'скорость', 'температура', 'угловое положение',
                               'magnetic intensity (sensors)']
@@ -171,7 +159,7 @@ class BViewer:
         self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val)
         # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
-        # print(header_row)
+        print(header_row)
 
         self.graphs_listbox.delete(0, END)
         for graph_name in header_row:
@@ -249,7 +237,7 @@ class BViewer:
         #     x1, y1 = [0, round_up_custom(max(x_axis), 100)], [4, 4]
         #     ax.plot(x1, y1, color=colors['darkred'], linewidth=2)
 
-        if self.list_item_in_string(self.magnetization_list, graph_name.lower()):
+        if self.list_item_in_string(self.cur_set.magnetization_list, graph_name.lower()):
             x1, y1 = [0, self.round_up_custom(max(x_axis), 100)], [10, 10]
             self.ax.plot(x1, y1, color=colors['red'], linewidth=2)
             x2, y2 = [0, self.round_up_custom(max(x_axis), 100)], [30, 30]
@@ -283,7 +271,7 @@ class BViewer:
         for label in self.ax.yaxis.get_majorticklabels():
             label.set_transform(label.get_transform() + offsetY)
 
-        if self.x_change_status == False:
+        if self.cur_set.get_x_change_status() == False:
             self.ax.set_xlim(xmin=0, xmax=self.round_up_custom(max(x_axis), 100))
             self.ax.xaxis.set_major_locator(MaxNLocator())
             self.ax.xaxis.set_major_formatter(FormatStrFormatter('%.0f'))
@@ -314,7 +302,7 @@ class BViewer:
             # Меняем цвет графика
             plt.gca().get_lines()[0].set_color(graph_settings['color'])
         else:
-            if self.x_change_status is False:
+            if self.cur_set.get_x_change_status() == False:
                 self.ax.yaxis.set_major_locator(MaxNLocator())
 
         plt.subplots_adjust(left=.09, bottom=.1, right=0.97, top=0.98, wspace=0, hspace=0)
@@ -360,14 +348,10 @@ class BViewer:
         self.y_axis = self.axis_table[:, y_index]
 
         # Домножение давления
-        if self.list_item_in_string(self.pressure_list, self.y_axis_name.lower()):
+        if self.list_item_in_string(self.cur_set.pressure_list, self.y_axis_name.lower()):
             self.y_axis = self.y_axis / 9.869
 
         self.y_axis = self.y_axis * float(self.y_mult_textbox.get()) + float(self.add_textbox.get())
-
-        # if savgol_value in filter_options_list:
-        #     savgol_value = filter_options_list[savgol_value]
-        #     y_axis = savgol_filter(y_axis, window_length=savgol_value, polyorder=2)
 
         x_axis_min_value = round(np.min(self.x_axis), 1)
         x_axis_max_value = round(np.max(self.x_axis), 1)
@@ -399,7 +383,7 @@ class BViewer:
     #    print('plot: ' + str(ex))
 
     def set_xminmax_no_event(self):
-        self.x_change_status = True
+        self.cur_set.set_x_change_status(True)
         if self.xmin_textbox.get() != "" and self.xmax_textbox.get() != 0:
             self.form_update_current_settings()
             xmin = float(self.xmin_textbox.get())
@@ -410,7 +394,7 @@ class BViewer:
             self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmax', cfg_value=xmax)
 
     def set_xminmax(self, event):
-        self.x_change_status = True
+        self.cur_set.set_x_change_status(True)
         if self.xmin_textbox.get() != "" and self.xmax_textbox.get() != 0:
             xmin = float(self.xmin_textbox.get())
             xmax = float(self.xmax_textbox.get())
@@ -488,7 +472,7 @@ class BViewer:
         xmult_desire = self.x_desire_textbox.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="xmult_desire",
                                             cfg_value=xmult_desire)
-        self.x_change_status = False
+        self.cur_set.set_x_change_status(False)
         self.plot()
         self.get_minmax_major_from_graph()
         self.write_current_settings()
@@ -585,9 +569,6 @@ class BViewer:
         ymult = self.y_mult_textbox.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymult', cfg_value=ymult)
 
-        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='is_changed',
-                                            cfg_value=self.x_change_status)
-
     def form_update_current_settings(self):
 
         if self.y_axis_name != "":
@@ -636,16 +617,19 @@ class BViewer:
             self.y_mult_textbox.delete(0, END)
             self.y_mult_textbox.insert(0, ymult)
 
-            self.x_change_status = self.cur_set.graphs_list[self.y_axis_name]['is_changed']
+            x_desire = self.cur_set.graphs_list[self.y_axis_name]['x_desire']
+            self.x_desire_textbox.delete(0, END)
+            self.x_desire_textbox.insert(0, x_desire)
 
     def select_file(self):
+
+        self.cur_set.json_export()
         filetypes = (
             ('Iligraph files', '*.ig~'),
             ('Excel files', '*.csv *.xlsx')
         )
 
-        self.x_change_status = False
-        # self.get_minmax_major()
+        self.cur_set.set_x_change_status(False)
         self.form_update_current_settings()
 
         filename = fd.askopenfilename(
@@ -660,19 +644,23 @@ class BViewer:
 
     def open_with_file(self, file_path):
 
+        self.cur_set.set_x_change_status(False)
+        self.form_update_current_settings()
+
         self.status_label1.config(text="Choose profile...")
         self.axis_table, self.header_row = self.get_axis_from_file(file_path)
 
     def auto_chart(self):
-        self.x_change_status = False
+        self.cur_set.set_x_change_status(False)
         self.add_textbox.delete(0, END)
         self.add_textbox.insert(0, 0)
         self.y_mult_textbox.delete(0, END)
         self.y_mult_textbox.insert(0, 1)
         self.x_desire_textbox.delete(0, END)
         self.x_desire_textbox.insert(0, 1)
-        self.write_current_settings()
         self.plot()
+        self.get_minmax_major_from_graph()
+        self.write_current_settings()
         # self.get_minmax_major()
         self.form_update_current_settings()
 

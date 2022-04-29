@@ -9,10 +9,13 @@ from cryptography.fernet import Fernet
 
 class CurrentSettings:
     # дериктория сохранения файлов
+
+    enable_encryption = True
+    misc_list = {'is_x_changed': False}
     cfg_dir = os.path.dirname(__file__) + "/CFGs"
     graphs_list = {}
     file_info = {"filename": "", "md5": ""}
-    temperature_list = ['temperature', 'температура', 'temp']
+    temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура']
     speed_list = ['speed', 'скорость']
     signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
     orientation_list = ['orientation', 'угловое положение', 'угол', 'angle']
@@ -36,11 +39,10 @@ class CurrentSettings:
         'ylabel_EN': '# Y LABEL ..',
         'yadd': 0.0,
         'ymult': 1.0,
-        'xmult_desire': 100,
+        'x_desire': 1,
         'savgol': 0,
         'color': 'black',
-        'lang': "RU",
-        'is_changed': False}
+        'lang': "RU"}
 
     def __init__(self):
         self.graphs_list = {}
@@ -80,7 +82,6 @@ class CurrentSettings:
         self.file_info["filename"] = filename
         self.file_info["md5"] = md5
 
-        self.graphs_list["file_info"] = self.file_info
         if filename != "demo":
             self.check_cfg_exist()
 
@@ -96,6 +97,12 @@ class CurrentSettings:
         for graph_settings in self.graphs_list:
             self.graphs_list[graph_settings]['xmajor'] = float(xmajor)
 
+    def set_x_change_status(self, x_change_status):
+        self.misc_list['is_x_changed'] = x_change_status
+
+    def get_x_change_status(self):
+        return self.misc_list['is_x_changed']
+
     def write_current_settings(self, graph_name, cfg_name, cfg_value):
         """
         Пишем адресно новое значение настроек в классе
@@ -108,37 +115,41 @@ class CurrentSettings:
             self.graphs_list[graph_name][cfg_name] = cfg_value
 
     def check_cfg_exist(self):
+        """
+        Проверяем наличие конфига
+        """
         for filename in os.listdir(self.cfg_dir):
-            if f'{self.file_info["filename"]}.json' == filename:
+            if f'{self.file_info["filename"]}.bjson' == filename:
                 filepath = os.path.join(self.cfg_dir, filename)
+                self.decrypt(filepath)
                 with open(filepath, encoding='utf-8') as json_file:
-                    data = json.load(json_file)
-                    cfg_md5 = data['file_info']['md5']
-                    if cfg_md5 == self.graphs_list['file_info']['md5']:
+                    json_pack_list = json.load(json_file)
+                    cfg_md5 = json_pack_list['file_info']['md5']
+                    if cfg_md5 == self.file_info['md5']:
                         print("CFG exists")
-                        self.graphs_list.update(data)
+                        self.graphs_list.update(json_pack_list['graphs_list'])
+                        self.misc_list.update((json_pack_list['misc_list']))
+                        self.encrypt(filepath)
                         return True
         print("CFG NOT exists")
-
-    def read_json(self, json_filename):
-        json_path = os.path.join(self.cfg_dir, json_filename)
-        with open(json_path, encoding='utf-8') as json_file:
-            data = json.load(json_file)
-            return data
-            # print("Json file:")
-            # print(data['ylabel'])
 
     def json_export(self):
         """
         Экспортируем в Json файл весь массив
         """
 
-        json_string = json.dumps(self.graphs_list, indent=5)
+        json_pack_list = {'graphs_list': self.graphs_list, 'file_info': self.file_info, 'misc_list': self.misc_list}
+
+        json_string = json.dumps(json_pack_list, indent=5)
 
         filename = self.file_info["filename"]
-        if filename != "demo1":
-            with open(f"{os.path.join(self.cfg_dir, filename)}.json", "w", encoding='utf-8') as outfile:
+        if filename != "demo":
+            with open(f"{os.path.join(self.cfg_dir, filename)}.bjson", "w", encoding='utf-8') as outfile:
                 outfile.write(json_string)
+                outfile.close()
+
+                self.encrypt(f"{os.path.join(self.cfg_dir, filename)}.bjson")
+
             # encrypt(f"{os.path.join(self.cfg_dir, filename)}.json",load_key())
 
     def presets_apply(self, graph_name):
@@ -225,6 +236,50 @@ class CurrentSettings:
                               "color": "darkgreen"}
             self.graphs_list[graph_name].update(graph_settings)
 
+    def encrypt(self, filename):
+        # Зашифруем файл и записываем его
+
+        if self.enable_encryption:
+            key = self.load_key()
+
+            f = Fernet(key)
+            with open(filename, 'rb') as file:
+                # прочитать все данные файла
+                file_data = file.read()
+                encrypted_data = f.encrypt(file_data)
+                with open(f"{filename}", 'wb') as file:
+                    file.write(encrypted_data)
+
+    def decrypt(self, filename):
+
+        if is_encrypted(filename):
+            key = self.load_key()
+            # Расшифруем файл и записываем его
+            f = Fernet(key)
+            with open(filename, 'rb') as file:
+                # читать зашифрованные данные
+                encrypted_data = file.read()
+            # расшифровать данные
+            file.close()
+            decrypted_data = f.decrypt(encrypted_data)
+            # записать оригинальный файл
+            with open(filename, 'wb') as file:
+                file.write(decrypted_data)
+
+    def load_key(self):
+        # Загружаем ключ 'crypto.key' из текущего каталога
+        return open('cryptotoken.key', 'rb').read()
+
+
+
+def is_encrypted(filename):
+    infile = open(filename, 'r')
+    text = infile.readlines()
+    if text[0] == "{\n":
+        return False
+    else:
+        return True
+
 
 def write_key():
     # Создаем ключ и сохраняем его в файл
@@ -233,30 +288,4 @@ def write_key():
         key_file.write(key)
 
 
-def load_key():
-    # Загружаем ключ 'crypto.key' из текущего каталога
-    return open('cryptotoken.key', 'rb').read()
 
-
-def encrypt(filename, key):
-    # Зашифруем файл и записываем его
-    f = Fernet(key)
-    with open(filename, 'rb') as file:
-        # прочитать все данные файла
-        file_data = file.read()
-        encrypted_data = f.encrypt(file_data)
-        with open(f"{filename}", 'wb') as file:
-            file.write(encrypted_data)
-
-
-def decrypt(filename, key):
-    # Расшифруем файл и записываем его
-    f = Fernet(key)
-    with open(filename, 'rb') as file:
-        # читать зашифрованные данные
-        encrypted_data = file.read()
-    # расшифровать данные
-    decrypted_data = f.decrypt(encrypted_data)
-    # записать оригинальный файл
-    with open(filename, 'wb') as file:
-        file.write(decrypted_data)

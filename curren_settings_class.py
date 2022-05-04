@@ -26,7 +26,8 @@ class CurrentSettings:
     cfg_dir = os.path.abspath(".") + "/CFGs"
     graphs_list = {}
     file_info = {"filename": "", "md5": ""}
-    temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура']
+    temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура',
+                        'temperature (product)']
     speed_list = ['speed', 'скорость']
     signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
     orientation_list = ['orientation', 'угловое положение', 'угол', 'angle']
@@ -296,6 +297,3 @@ def write_key():
     key = Fernet.generate_key()
     with open('crypto.key', 'wb') as key_file:
         key_file.write(key)
-
-
-

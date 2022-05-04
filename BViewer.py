@@ -20,7 +20,7 @@ import sys
 
 
 class BViewer:
-    EXP_DAY = '2022-05-15'
+    EXP_DAY = '2022-05-31'
     header_item = ''
     export_path = ''
 
@@ -372,10 +372,11 @@ class BViewer:
         y_axis_max_mult_value = round(np.max(self.x_axis_mult), 1)
 
         self.status_label2.config(text=f"Average={y_axis_average_value}\n\n"
-                                       f"X-MIN={x_axis_min_value} : "
-                                       f"X-MAX={x_axis_max_value}\n"
-                                       f"Y-MIN={y_axis_min_value} : "
-                                       f"Y-MAX={y_axis_max_value}", anchor='w')
+                                       f"X-MIN = {x_axis_min_value} : "
+                                       f"X-MAX = {x_axis_max_value}\n"
+                                       f"Y-MIN = {y_axis_min_value} : "
+                                       f"Y-MAX = {y_axis_max_value}\n\n"
+                                       f"{self.cur_set.file_info['filename']}", anchor='w')
 
         self.make_graph(self.x_axis_mult, self.y_axis_filter, self.y_axis_name)
 
@@ -470,7 +471,7 @@ class BViewer:
 
     def set_xmult(self, event):
         xmult_desire = self.x_desire_textbox.get()
-        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="xmult_desire",
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="x_desire",
                                             cfg_value=xmult_desire)
         self.cur_set.set_x_change_status(False)
         self.plot()
@@ -758,9 +759,12 @@ class BViewer:
                 self.make_graph(x, y, "Sin (x)")
 
             def on_closing():
-                self.cur_set.json_export()
-                self.window.destroy()
-                sys.exit()
+                try:
+                    self.cur_set.json_export()
+                    self.window.destroy()
+                    sys.exit()
+                except:
+                    sys.exit()
 
             self.window.protocol("WM_DELETE_WINDOW", on_closing)
 

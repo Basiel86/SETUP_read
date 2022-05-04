@@ -7,12 +7,23 @@ import types
 from cryptography.fernet import Fernet
 
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception as ex:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
 class CurrentSettings:
     # дериктория сохранения файлов
 
     enable_encryption = True
     misc_list = {'is_x_changed': False}
-    cfg_dir = os.path.dirname(__file__) + "/CFGs"
+    cfg_dir = os.path.abspath(".") + "/CFGs"
     graphs_list = {}
     file_info = {"filename": "", "md5": ""}
     temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура']
@@ -268,8 +279,7 @@ class CurrentSettings:
 
     def load_key(self):
         # Загружаем ключ 'crypto.key' из текущего каталога
-        return open('cryptotoken.key', 'rb').read()
-
+        return open(resource_path('cryptotoken.key'), 'rb').read()
 
 
 def is_encrypted(filename):

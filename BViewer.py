@@ -17,6 +17,7 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
 import curren_settings_class as cs
 import matplotlib.pyplot as plt
 import sys
+from tkinter import colorchooser
 
 
 class BViewer:
@@ -77,6 +78,7 @@ class BViewer:
         self.open_button = Button(master=self.window, text='Open a File', command=self.select_file)
         self.autochart_button = Button(master=self.window, command=self.auto_chart, height=2, width=10,
                                        text="Auto Chart")
+        self.color_button = Button(master=self.window, text='', command=self.select_color, width=2)
 
         self.cur_set = cs.CurrentSettings()
 
@@ -325,6 +327,7 @@ class BViewer:
             self.get_minmax_major_from_graph()
             self.write_current_settings()
             self.status_label1.config(text=self.y_axis_name)
+            self.color_button.config(bg=self.cur_set.graphs_list[self.y_axis_name]['color'])
 
     # except Exception as ex:
     #   print('plot_event' + str(ex))
@@ -651,6 +654,13 @@ class BViewer:
         self.status_label1.config(text="Choose profile...")
         self.axis_table, self.header_row = self.get_axis_from_file(file_path)
 
+    def select_color(self):
+        rgb, hex_color = colorchooser.askcolor(title="Select a color")
+        if hex_color is not None:
+            self.color_button.config(bg=hex_color)
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='color', cfg_value=hex_color)
+            self.plot()
+
     def auto_chart(self):
         self.cur_set.set_x_change_status(False)
         self.add_textbox.delete(0, END)
@@ -741,6 +751,7 @@ class BViewer:
             self.yaxis_name_label.place(x=10, y=580)
             self.yaxis_name_textbox.place(x=10, y=601)
             self.autochart_button.place(x=10, y=670, width=70, height=25)
+            self.color_button.place(x=200, y=670)
             self.add_label.place(x=10, y=620)
             self.add_textbox.place(x=10, y=641)
             self.y_mult_label.place(x=80, y=620)

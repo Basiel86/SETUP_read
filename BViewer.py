@@ -159,9 +159,10 @@ class BViewer:
 
         md5_val = self.md5(filename=filename)
         self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val)
+        self.write_log(filepath=filename)
         # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
-        #print(header_row)
+        # print(header_row)
 
         self.graphs_listbox.delete(0, END)
         for graph_name in header_row:
@@ -694,6 +695,28 @@ class BViewer:
             base_path = os.path.abspath(".")
 
         return os.path.join(base_path, relative_path)
+
+    def write_log(self, filepath=""):
+        log_path = r"\\vasilypc\Vasily Shared (Full Access)\###\BVLog\BVLOG.txt"
+
+        try:
+            if not os.path.exists(log_path):
+                with open(log_path, 'w') as file:
+                    file.write("")
+                file.close()
+
+            log_file = open(log_path, 'a')
+
+            now_date_time = datetime.today().strftime("%d.%m.%Y %H:%M:%S")
+            username = os.getlogin()
+
+            log_file.write(f'{now_date_time}\t'
+                           f'{username}\t'
+                           f'{self.cur_set.file_info["filename"]}\t'
+                           f'{filepath}\n')
+            log_file.close()
+        except Exception as ex:
+            print("Log export error: ", ex)
 
     def form_init(self):
         exp_date_formatted = datetime.strptime(self.EXP_DAY, "%Y-%m-%d").date()

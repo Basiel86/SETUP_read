@@ -161,7 +161,7 @@ class BViewer:
         self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val)
         # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
-        print(header_row)
+        #print(header_row)
 
         self.graphs_listbox.delete(0, END)
         for graph_name in header_row:

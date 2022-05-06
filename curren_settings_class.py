@@ -23,7 +23,7 @@ class CurrentSettings:
 
     enable_encryption = True
     misc_list = {'is_x_changed': False}
-    cfg_dir = os.path.abspath(".") + "/CFGs"
+    cfg_dir = os.path.abspath(".") + "\\CFGs"
     graphs_list = {}
     file_info = {"filename": "", "md5": ""}
     temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура',
@@ -126,13 +126,30 @@ class CurrentSettings:
         except ValueError:
             self.graphs_list[graph_name][cfg_name] = cfg_value
 
+    def check_cfg_file_exists_in_path(self, cfg_folder_path):
+        if cfg_folder_path is not None:
+            for filename in os.listdir(cfg_folder_path):
+                if f'{self.file_info["filename"]}.bjson' == filename:
+                    return True
+                else:
+                    return False
+
     def check_cfg_exist(self):
         """
         Проверяем наличие конфига
         """
-        for filename in os.listdir(self.cfg_dir):
+        paths_list = [get_srv_path(), self.cfg_dir]
+
+        if self.check_cfg_file_exists_in_path(paths_list[0]):
+            search_path = paths_list[0]
+            print("CFG exists on SRV")
+        else:
+            search_path = paths_list[1]
+            print("CFG Not found on Server, try to find on local")
+
+        for filename in os.listdir(search_path):
             if f'{self.file_info["filename"]}.bjson' == filename:
-                filepath = os.path.join(self.cfg_dir, filename)
+                filepath = os.path.join(search_path, filename)
                 self.decrypt(filepath)
                 with open(filepath, encoding='utf-8') as json_file:
                     json_pack_list = json.load(json_file)
@@ -159,8 +176,17 @@ class CurrentSettings:
             with open(f"{os.path.join(self.cfg_dir, filename)}.bjson", "w", encoding='utf-8') as outfile:
                 outfile.write(json_string)
                 outfile.close()
-
                 self.encrypt(f"{os.path.join(self.cfg_dir, filename)}.bjson")
+
+            # пишем на сервер
+            try:
+                if get_srv_path() is not None:
+                    with open(f"{os.path.join(get_srv_path(), filename)}.bjson", "w", encoding='utf-8') as outfile:
+                        outfile.write(json_string)
+                        outfile.close()
+                        self.encrypt(f"{os.path.join(get_srv_path(), filename)}.bjson")
+            except Exception as ex:
+                print("Copy to server error: ", ex)
 
             # encrypt(f"{os.path.join(self.cfg_dir, filename)}.json",load_key())
 
@@ -297,3 +323,23 @@ def write_key():
     key = Fernet.generate_key()
     with open('crypto.key', 'wb') as key_file:
         key_file.write(key)
+
+
+def is_srv_list_exist():
+    srv_path_file_name = "Server config folder path.txt"
+    srv_path_file_path = resource_path(srv_path_file_name)
+    if not os.path.exists(srv_path_file_path):
+        with open(srv_path_file_path, 'w') as file:
+            file.write(f"\\\\192.168.1.201\Public\Share\BVConfigs")
+    return srv_path_file_path
+
+
+def get_srv_path():
+    srv_path_file_path = is_srv_list_exist()
+    with open(srv_path_file_path) as f:
+        lines = f.read()
+        first = lines.split('\n', 1)[0]
+    if os.path.exists(first):
+        return first
+    else:
+        return None

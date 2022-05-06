@@ -2,7 +2,6 @@ import json
 import copy
 import os
 import sys
-import types
 
 from cryptography.fernet import Fernet
 
@@ -327,7 +326,7 @@ def write_key():
 
 def is_srv_list_exist():
     srv_path_file_name = "Server config folder path.txt"
-    srv_path_file_path = resource_path(srv_path_file_name)
+    srv_path_file_path = os.path.join(os.path.abspath("."),srv_path_file_name)
     if not os.path.exists(srv_path_file_path):
         with open(srv_path_file_path, 'w') as file:
             file.write(f"\\\\192.168.1.201\Public\Share\BVConfigs")

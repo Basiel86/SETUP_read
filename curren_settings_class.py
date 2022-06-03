@@ -27,6 +27,7 @@ class CurrentSettings:
     file_info = {"filename": "", "md5": ""}
     temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура',
                         'temperature (product)']
+    time_list = ['time', 'время']
     speed_list = ['speed', 'скорость']
     signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
     orientation_list = ['orientation', 'угловое положение', 'угол', 'angle']
@@ -126,12 +127,13 @@ class CurrentSettings:
             self.graphs_list[graph_name][cfg_name] = cfg_value
 
     def check_cfg_file_exists_in_path(self, cfg_folder_path):
+        file_exists = False
         if cfg_folder_path is not None:
             for filename in os.listdir(cfg_folder_path):
                 if f'{self.file_info["filename"]}.bjson' == filename:
                     return True
-                else:
-                    return False
+            return False
+
 
     def check_cfg_exist(self):
         """
@@ -263,6 +265,13 @@ class CurrentSettings:
                               "ylabel_RU": "Потеря сигнала, %",
                               "ylabel_EN": "Signal loss, %",
                               "color": "darkgreen"}
+
+            self.graphs_list[graph_name].update(graph_settings)
+
+        elif graph_name.lower() in self.time_list:
+            graph_settings = {"ylabel_RU": "Время, ч:м:с",
+                              "ylabel_EN": "Time, h:m:s",
+                              "color": "black"}
 
             self.graphs_list[graph_name].update(graph_settings)
 

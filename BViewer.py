@@ -1,27 +1,35 @@
+import csv
 import hashlib
 import math
-import tkinter
 import numpy as np
-import pandas as pd
 import os
-from matplotlib.ticker import FormatStrFormatter, MultipleLocator, MaxNLocator
-import matplotlib.colors as mcolors
-import matplotlib.transforms
-from scipy.signal import savgol_filter
-from tkinter import *
-from tkinter import filedialog as fd
-import csv
+import sys
+import tkinter
+from PIL import Image
 from datetime import datetime, date
+from io import StringIO
+from time import sleep
+from tkinter import *
+from tkinter import colorchooser
+from tkinter import filedialog as fd
+import xlrd
+
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+import matplotlib.transforms
+import pandas as pd
+import win32clipboard
+from matplotlib import pyplot as plt, dates
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)
+from matplotlib.ticker import FormatStrFormatter, MultipleLocator, MaxNLocator
+from scipy.signal import savgol_filter
+
 import curren_settings_class as cs
-import matplotlib.pyplot as plt
-import sys
-from tkinter import colorchooser
 
 
 class BViewer:
-    EXP_DAY = '2022-05-31'
+    EXP_DAY = '2022-06-30'
     header_item = ''
     export_path = ''
 
@@ -49,6 +57,9 @@ class BViewer:
         self.language_value_combobox = OptionMenu(self.window, self.language_variable, *self.language_options,
                                                   command=self.change_language)
         self.filter_value_label = Label(master=self.window, text="Smoothing Value")
+        self.noise_variable = IntVar()
+        self.noise_checkbox = Checkbutton(master=self.window, variable=self.noise_variable, text="Enable Noise",
+                                          onvalue=1, offvalue=0, command=self.noise_checkbox_change)
         self.yaxis_name_textbox = Entry(master=self.window, width=35)
         self.xaxis_name_textbox = Entry(master=self.window, width=35)
         self.yaxis_name_label = Label(master=self.window, text="Y Axis Name")
@@ -92,6 +103,7 @@ class BViewer:
 
         self.slider_value = 0
         self.x_axis = []
+        self.time_data_array = []
         self.y_axis = []
         self.x_axis_name = ''
         self.y_axis_name = ''
@@ -163,6 +175,14 @@ class BViewer:
         # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
         # print(header_row)
+
+        if "Time" in header_row:
+            y_index = np.argwhere(header_row == "Time")[0][0]
+            date_time_array = np.empty((len(axis_array[:, y_index]), 1), dtype=object)
+            for i, elem in enumerate(axis_array[:, y_index]):
+                date_time_array[i, 0] = datetime(*xlrd.xldate_as_tuple(elem, 0))
+
+            self.time_data_array = date_time_array
 
         self.graphs_listbox.delete(0, END)
         for graph_name in header_row:
@@ -240,11 +260,12 @@ class BViewer:
         #     x1, y1 = [0, round_up_custom(max(x_axis), 100)], [4, 4]
         #     ax.plot(x1, y1, color=colors['darkred'], linewidth=2)
 
-        if self.list_item_in_string(self.cur_set.magnetization_list, graph_name.lower()):
-            x1, y1 = [0, self.round_up_custom(max(x_axis), 100)], [10, 10]
-            self.ax.plot(x1, y1, color=colors['red'], linewidth=2)
-            x2, y2 = [0, self.round_up_custom(max(x_axis), 100)], [30, 30]
-            self.ax.plot(x2, y2, color=colors['blue'], linewidth=2)
+        # Линия для графика намагниченности
+        # if self.list_item_in_string(self.cur_set.magnetization_list, graph_name.lower()):
+        #     x1, y1 = [0, self.round_up_custom(max(x_axis), 100)], [10, 10]
+        #     self.ax.plot(x1, y1, color=colors['red'], linewidth=2)
+        #     x2, y2 = [0, self.round_up_custom(max(x_axis), 100)], [30, 30]
+        #     self.ax.plot(x2, y2, color=colors['blue'], linewidth=2)
 
         graph_settings = self.cur_set.graphs_list[graph_name]
         self.ax.grid()
@@ -277,6 +298,7 @@ class BViewer:
         if self.cur_set.get_x_change_status() == False:
             self.ax.set_xlim(xmin=0, xmax=self.round_up_custom(max(x_axis), 100))
             self.ax.xaxis.set_major_locator(MaxNLocator())
+
             self.ax.xaxis.set_major_formatter(FormatStrFormatter('%.0f'))
         else:
             self.set_xminmax_no_event()
@@ -288,16 +310,34 @@ class BViewer:
         if graph_settings != {}:
             # Максимальное значение графика
             ymax = graph_settings['ymax']
+            ymajor = graph_settings['ymajor']
+
             if ymax != 0:
-                self.ax.set_ylim(ymin=0, ymax=ymax)
-                # Локатор с фиксированным шагом
-                self.ax.yaxis.set_major_locator(MultipleLocator(base=graph_settings['ymajor']))
+                if graph_name == "Time":
+                    ymin = round(np.min(y_axis), 1)
+                else:
+                    ymin = 0
+                self.ax.set_ylim(ymin=ymin, ymax=ymax)
+
+                self.y_major_locator_parse_and_set(ymin, ymax, ymajor)
+
             else:
                 self.ax.set_ylim(ymin=0, ymax=self.round_up_custom(max(y_axis), 1))
                 self.ax.yaxis.set_major_locator(MaxNLocator())
 
+            if graph_name == "Time":
+                # date_time_array = np.empty((len(self.y_axis), 1), dtype=object)
+                # for i, elem in enumerate(self.y_axis):
+                #     exceldate = datetime(*xlrd.xldate_as_tuple(elem, 0))
+                #     # dt_format = datetime.strptime(exceldate,'%y:%m:%d').date()
+                #     date_time_array[i, 0] = exceldate
+                self.y_axis = self.time_data_array
+
             # Формат оси
-            self.ax.yaxis.set_major_formatter(FormatStrFormatter(graph_settings['ymax_format']))
+            if graph_name == "Time":
+                self.ax.yaxis.set_major_formatter(dates.DateFormatter('%H:%M:%S'))
+            else:
+                self.ax.yaxis.set_major_formatter(FormatStrFormatter(graph_settings['ymax_format']))
             # Лэйбл оси
             lang = self.language_variable.get()
             plt.ylabel(graph_settings[f'ylabel_{graph_settings["lang"]}'], labelpad=10,
@@ -308,7 +348,11 @@ class BViewer:
             if self.cur_set.get_x_change_status() == False:
                 self.ax.yaxis.set_major_locator(MaxNLocator())
 
-        plt.subplots_adjust(left=.09, bottom=.1, right=0.97, top=0.98, wspace=0, hspace=0)
+        # Формат оси
+        if graph_name == "Time":
+            plt.subplots_adjust(left=.1, bottom=.1, right=0.97, top=0.98, wspace=0, hspace=0)
+        else:
+            plt.subplots_adjust(left=.09, bottom=.1, right=0.97, top=0.98, wspace=0, hspace=0)
 
         self.canvas.draw()
 
@@ -317,8 +361,8 @@ class BViewer:
         self.canvas.draw()
 
     def plot_event(self, event):
-        # try:
 
+        # try:
         if self.graphs_listbox.curselection().__len__() != 0 or self.y_axis_name is not None:
             for i in self.graphs_listbox.curselection():
                 self.y_axis_name = self.graphs_listbox.get(i)
@@ -366,14 +410,44 @@ class BViewer:
         self.savgol_value = self.get_filter_slieder()
         self.y_axis_filter = savgol_filter(self.y_axis, window_length=self.savgol_value, polyorder=2)
 
+        if self.noise_variable.get() == 1:
+            # добавляем шумов
+            # ***********************
+            koeff = 200 / (y_axis_average_value * 6 + 12)
+            rho = self.savgol_value / koeff / 150
+            sr = rho
+            n = len(self.y_axis)
+            noise = white_noise(rho, sr, n)
+            y_axis_noise = self.y_axis + noise
+
+            tmp_savg = int(round(self.savgol_value / 20, 0))
+            if tmp_savg < 3:
+                tmp_savg = 3
+            if tmp_savg % 2 == 0:
+                tmp_savg = tmp_savg + 1
+
+            y_axis_noise = savgol_filter(y_axis_noise, window_length=tmp_savg, polyorder=2)
+
+            # ******************
+
+            y_axis_use = y_axis_noise
+        else:
+            y_axis_use = self.y_axis_filter
+
+        # coeff = self.savgol_value/2000
+        # target_noise_db = self.savgol_value / 2000
+        # target_noise_watts = coeff ** (target_noise_db / coeff)
+        # mean_noise = 0
+        # y_noise = np.random.normal(mean_noise, np.sqrt(target_noise_watts), len(self.y_axis))
+        # y_axis_noise = self.y_axis + y_noise
+        # ***********************
+
         x_desire = float(self.x_desire_textbox.get())
         if x_desire > 1:
             desire_coeff = float(self.x_desire_textbox.get()) / x_axis_max_value
         else:
             desire_coeff = 1
         self.x_axis_mult = self.x_axis * desire_coeff
-
-        y_axis_max_mult_value = round(np.max(self.x_axis_mult), 1)
 
         self.status_label2.config(text=f"Average={y_axis_average_value}\n\n"
                                        f"X-MIN = {x_axis_min_value} : "
@@ -382,7 +456,7 @@ class BViewer:
                                        f"Y-MAX = {y_axis_max_value}\n\n"
                                        f"{self.cur_set.file_info['filename']}", anchor='w')
 
-        self.make_graph(self.x_axis_mult, self.y_axis_filter, self.y_axis_name)
+        self.make_graph(self.x_axis_mult, y_axis_use, self.y_axis_name)
 
     # except Exception as ex:
     #    print('plot: ' + str(ex))
@@ -434,16 +508,37 @@ class BViewer:
         if self.ymin_textbox.get() != "" and self.ymax_textbox.get() != 0:
             ymin = float(self.ymin_textbox.get())
             ymax = float(self.ymax_textbox.get())
+            ymajor = float(self.ymajor_textbox.get())
+            self.y_major_locator_parse_and_set(ymin=ymin, ymax=ymax, ymajor=ymajor)
             self.ax.set_ylim(ymin=ymin, ymax=ymax)
             self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymin', cfg_value=ymin)
             self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymax', cfg_value=ymax)
             self.canvas.draw()
 
     def set_ymajor(self, event):
-        ymajor_value = float(self.ymajor_textbox.get())
-        self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor_value))
-        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymajor', cfg_value=ymajor_value)
+        ymin = float(self.ymin_textbox.get())
+        ymax = float(self.ymax_textbox.get())
+        ymajor = float(self.ymajor_textbox.get())
+
+        self.y_major_locator_parse_and_set(ymin=ymin, ymax=ymax, ymajor=ymajor)
+        # self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor_value))
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymajor', cfg_value=ymajor)
         self.canvas.draw()
+
+    def y_major_locator_parse_and_set(self, ymin, ymax, ymajor):
+
+        if ymajor == 0:
+            ymajor = 0.0001
+
+        ticks_count = (ymax - ymin) / ymajor
+
+        if 5 < ticks_count < 100:
+            # Локатор с фиксированным шагом
+            self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor))
+            # self.get_minmax_major_from_graph()
+            self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymajor', cfg_value=ymin)
+        else:
+            self.ax.yaxis.set_major_locator(MaxNLocator())
 
     def set_xlabel_name(self, event):
         lang = self.cur_set.graphs_list[self.y_axis_name]['lang']
@@ -508,6 +603,7 @@ class BViewer:
         return slider_value
 
     def get_minmax_major_from_graph(self):
+
         xmin, xmax = plt.gca().get_xlim()
         self.xmin_textbox.delete(0, END)
         self.xmax_textbox.delete(0, END)
@@ -573,6 +669,34 @@ class BViewer:
 
         ymult = self.y_mult_textbox.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymult', cfg_value=ymult)
+
+    def copy2clipboard(fig=None):
+        '''
+        copy a matplotlib figure to clipboard as BMP on windows
+        http://stackoverflow.com/questions/7050448/write-image-to-windows-clipboard-in-python-with-pil-and-win32clipboard
+        '''
+        if not fig:
+            fig = matplotlib.pyplot.gcf()
+
+        output = StringIO()
+        # fig.savefig(output, format='bmp') # bmp not supported
+        buf = fig.canvas.buffer_rgba()
+        w = int(fig.get_figwidth() * fig.dpi)
+        h = int(fig.get_figheight() * fig.dpi)
+        im = Image.frombuffer('RGBA', (w, h), buf)
+        im.transpose(Image.FLIP_TOP_BOTTOM).convert("RGB").save(output, "BMP")
+        data = output.getvalue()[14:]  # The file header off-set of BMP is 14 bytes
+        output.close()
+
+        try:
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            # win32clipboard.SetClipboardData(win32clipboard.CF_BITMAP, data) # did not work!
+            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)  # DIB = device independent bitmap
+            win32clipboard.CloseClipboard()
+        except:
+            sleep(0.2)
+            # copy2clipboard(fig)
 
     def form_update_current_settings(self):
 
@@ -643,6 +767,8 @@ class BViewer:
             filetypes=filetypes)
 
         if filename != "":
+            self.file_path = os.path.dirname(filename)
+
             self.status_label1.config(text="Choose profile...")
             # filepath = pathlib.Path(filename).parent.resolve()
             self.axis_table, self.header_row = self.get_axis_from_file(filename)
@@ -681,9 +807,16 @@ class BViewer:
         try:
             np.savetxt(f"{self.file_path}/{self.y_axis_name}.csv", np.transpose([self.x_axis_mult, self.y_axis_filter]),
                        delimiter=',',
-                       header=f"Distance, {self.y_axis_name}")
+                       header=f"Distance,{self.y_axis_name}",
+                       comments='')
         except Exception as ex:
             print("Nothing to export: " + str(ex))
+
+    def noise_checkbox_change(self):
+        if self.noise_variable.get() == 1:
+            self.filter_value_label.config(text="Noise Value")
+        else:
+            self.filter_value_label.config(text="Smoothing Value")
 
     @staticmethod
     def resource_path(relative_path):
@@ -705,13 +838,15 @@ class BViewer:
                     file.write("")
                 file.close()
 
-            log_file = open(log_path, 'a')
+            log_file = open(log_path, 'a', encoding='utf-8')
 
             now_date_time = datetime.today().strftime("%d.%m.%Y %H:%M:%S")
-            username = os.getlogin()
+            username = os.getenv('username')
+            pc_name = os.environ['COMPUTERNAME']
 
             log_file.write(f'{now_date_time}\t'
-                           f'{username}\t'
+                           f'user: {username}\t\t'
+                           f'pc: {pc_name}\t\t'
                            f'{self.cur_set.file_info["filename"]}\t'
                            f'{filepath}\n')
             log_file.close()
@@ -749,6 +884,7 @@ class BViewer:
             self.filter_variable.set(self.filter_options[0])
             self.status_label2.place(x=10, y=700)
             self.filter_value_label.place(x=10, y=380)
+            self.noise_checkbox.place(x=120, y=380)
             self.filter_slider.place(x=10, y=400)
             self.status_label1.place(x=10, y=5)
             self.status_label1.config(text="Select file...")
@@ -790,6 +926,7 @@ class BViewer:
                 # print("sys path error: " + str(ex))
                 x = np.linspace(0, 300, 150)
                 y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
+
                 self.make_graph(x, y, "Sin (x)")
 
             def on_closing():
@@ -820,6 +957,12 @@ class BViewer:
 
             self.window.protocol("WM_DELETE_WINDOW", on_closing)
             self.window.mainloop()
+
+
+def white_noise(rho, sr, n, mu=0):
+    sigma = rho * np.sqrt(sr / 2)
+    noise = np.random.normal(mu, sigma, n)
+    return noise
 
 
 if __name__ == "__main__":

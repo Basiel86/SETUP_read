@@ -29,7 +29,7 @@ import curren_settings_class as cs
 
 
 class BViewer:
-    EXP_DAY = '2022-06-30'
+    EXP_DAY = '2022-07-07'
     header_item = ''
     export_path = ''
 
@@ -136,7 +136,7 @@ class BViewer:
             with open(filename, encoding="utf-8-sig") as csv_file:
                 reader = csv.reader(csv_file)
                 headers = next(reader)
-                if "Distance" in headers:
+                if "Distance" or "Дистанция" in headers:
                     header_row = np.array(headers)
                     header_row_index = 1
                     return header_row, header_row_index
@@ -145,7 +145,7 @@ class BViewer:
             pandas_df_excel = pd.read_excel(filename)
             header_row = np.array(pandas_df_excel.columns.values)
 
-            if "Distance" in header_row:
+            if "Distance" or "Дистанция" in header_row:
                 header_row_index = 1
                 return header_row, header_row_index
 
@@ -489,6 +489,7 @@ class BViewer:
         self.plot()
 
     def set_xmajor_no_event(self):
+        self.cur_set.set_x_change_status(True)
         if self.xmajor_textbox.get() != "":
             xmajor_value = float(self.xmajor_textbox.get())
             self.ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))
@@ -496,6 +497,7 @@ class BViewer:
             self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmajor', cfg_value=xmajor_value)
 
     def set_xmajor(self, event):
+        self.cur_set.set_x_change_status(True)
         if self.xmajor_textbox.get() != "":
             xmajor_value = float(self.xmajor_textbox.get())
             self.ax.xaxis.set_major_locator(MultipleLocator(base=xmajor_value))

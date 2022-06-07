@@ -2,6 +2,7 @@ import json
 import copy
 import os
 import sys
+import pandas as pd
 
 from cryptography.fernet import Fernet
 
@@ -26,11 +27,11 @@ class CurrentSettings:
     graphs_list = {}
     file_info = {"filename": "", "md5": ""}
     temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура',
-                        'temperature (product)']
+                        'temperature (product)', 'temperature (battery module)']
     time_list = ['time', 'время']
     speed_list = ['speed', 'скорость']
     signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
-    orientation_list = ['orientation', 'угловое положение', 'угол', 'angle']
+    orientation_list = ['orientation', 'угловое положение', 'угол', 'angle', 'pendulum']
     pressure_list = ['pressure (product)', 'pressure', 'давление']
     magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)',
                           'magnetic intensity (sensors)',
@@ -55,6 +56,10 @@ class CurrentSettings:
         'savgol': 0,
         'color': 'black',
         'lang': "RU"}
+
+    ig_index_filename = resource_path('IG_Codes.xlsx')
+    ig_index_df = pd.read_excel(ig_index_filename, sheet_name='IG_Codes')
+
 
     def __init__(self):
         self.graphs_list = {}

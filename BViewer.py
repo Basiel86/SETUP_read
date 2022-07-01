@@ -4,17 +4,21 @@ import math
 import numpy as np
 import os
 import tkinter
-from PIL import Image
+
 from datetime import datetime, date
-from io import StringIO
-from time import sleep
+
 from tkinter import *
 from tkinter import colorchooser
 from tkinter import filedialog as fd
 import xlrd
 
+
+from io import BytesIO
+from time import sleep
+
+from PIL import Image
+
 import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
 import matplotlib.transforms
 import pandas as pd
 import win32clipboard
@@ -38,8 +42,10 @@ class BViewer:
         self.fig = plt.figure(figsize=(16, 8))
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.window)
         self.canvas.get_tk_widget().place(x=250, y=10)
+
         self.ax = self.fig.add_subplot(111)
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.window, pack_toolbar=False)
+
 
         self.filter_value_var = StringVar()
         self.filter_options = ["no filter",
@@ -99,12 +105,17 @@ class BViewer:
         self.open_button = Button(master=self.window, text='Open a File', command=self.select_file)
         self.autochart_button = Button(master=self.window, command=self.auto_chart, height=2, width=10,
                                        text="Auto Chart")
+        self.cfg_reset_button = Button(master=self.window, command=self.cfg_reset, height=2, width=10,
+                                       text="CFG Reset")
         self.color_button = Button(master=self.window, text='', command=self.select_color, width=2)
+
 
         self.cur_set = cs.CurrentSettings()
 
         self.cur_set.set_x_change_status(False)
         self.file_path = ""
+        self.file_path_full = ""
+
         self.accept_graphs = ['speed', 'orientation', 'temperature', 'скорость', 'температура', 'угловое положение',
                               'magnetic intensity (sensors)']
         self.header_row = ""
@@ -161,7 +172,7 @@ class BViewer:
 
         raise ValueError("Дистанции в файле не обнаружено")
 
-    def get_axis_from_file(self, filename):
+    def get_axis_from_file(self, filename, check_cfg=True):
         extension = os.path.splitext(filename)[1][1:]
         header_row, header_row_index = self.setup_parse_row(filename)
         start_column = 0
@@ -179,8 +190,10 @@ class BViewer:
         if header_row[0] == '':
             header_row = np.delete(header_row, 0)
 
+        self.file_path_full = filename
         md5_val = self.md5(filename=filename)
-        self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val)
+        self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val,
+                                  check_cfg=check_cfg)
         self.write_log(filepath=filename)
         # CS = cs.CurrentSettings(header_row, os.path.basename(filename))
 
@@ -368,6 +381,32 @@ class BViewer:
     def graph_update(self):
         self.ax.plot(self.x_axis, self.y_axis)
         self.canvas.draw()
+
+    def copy2clipboard(self, event=""):
+        '''
+        copy a matplotlib figure to clipboard as BMP on windows
+        http://stackoverflow.com/questions/7050448/write-image-to-windows-clipboard-in-python-with-pil-and-win32clipboard
+        '''
+        output = BytesIO()
+        # fig.savefig(output, format='bmp') # bmp not supported
+        buf = self.canvas.buffer_rgba()
+        w = int(self.fig.get_figwidth() * self.fig.dpi)
+        h = int(self.fig.get_figheight() * self.fig.dpi)
+        im = Image.frombuffer('RGBA', (w, h), buf)
+        im.convert("RGB").save(output, "BMP")
+        #im.transpose(Image.FLIP_TOP_BOTTOM).convert("RGB").save(output, "BMP")
+        data = output.getvalue()[14:]  # The file header off-set of BMP is 14 bytes
+        output.close()
+
+        try:
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            # win32clipboard.SetClipboardData(win32clipboard.CF_BITMAP, data) # did not work!
+            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)  # DIB = device independent bitmap
+            win32clipboard.CloseClipboard()
+        except:
+            sleep(0.2)
+            self.copy2clipboard()
 
     def plot_event(self, event):
 
@@ -694,34 +733,6 @@ class BViewer:
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_2_value',
                                             cfg_value=line_2_value)
 
-    def copy2clipboard(fig=None):
-        '''
-        copy a matplotlib figure to clipboard as BMP on windows
-        http://stackoverflow.com/questions/7050448/write-image-to-windows-clipboard-in-python-with-pil-and-win32clipboard
-        '''
-        if not fig:
-            fig = matplotlib.pyplot.gcf()
-
-        output = StringIO()
-        # fig.savefig(output, format='bmp') # bmp not supported
-        buf = fig.canvas.buffer_rgba()
-        w = int(fig.get_figwidth() * fig.dpi)
-        h = int(fig.get_figheight() * fig.dpi)
-        im = Image.frombuffer('RGBA', (w, h), buf)
-        im.transpose(Image.FLIP_TOP_BOTTOM).convert("RGB").save(output, "BMP")
-        data = output.getvalue()[14:]  # The file header off-set of BMP is 14 bytes
-        output.close()
-
-        try:
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            # win32clipboard.SetClipboardData(win32clipboard.CF_BITMAP, data) # did not work!
-            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)  # DIB = device independent bitmap
-            win32clipboard.CloseClipboard()
-        except:
-            sleep(0.2)
-            # copy2clipboard(fig)
-
     # Берем настройки из конфига
     def form_update_current_settings(self):
 
@@ -832,6 +843,11 @@ class BViewer:
             self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='color', cfg_value=hex_color)
             self.plot()
 
+    def cfg_reset(self):
+        self.cur_set.set_x_change_status(False)
+        a, b = self.get_axis_from_file(self.file_path_full, check_cfg=False)
+        self.plot()
+
     def auto_chart(self):
         self.cur_set.set_x_change_status(False)
         self.add_textbox.delete(0, END)
@@ -934,6 +950,10 @@ class BViewer:
             ico_abs_path = self.resource_path('BV2.ico')
             self.window.wm_iconbitmap(ico_abs_path)
             self.graphs_listbox.bind('<<ListboxSelect>>', self.plot_event)
+            self.graphs_listbox.bind('<Double-Button-1>', self.copy2clipboard)
+
+            self.window.bind('<Double-Button-1>', self.copy2clipboard)
+
             self.status_label2.config(text="Stats...")
             self.xmin_textbox.bind('<Return>', self.set_xminmax)
             self.xmax_textbox.bind('<Return>', self.set_xminmax)
@@ -993,6 +1013,8 @@ class BViewer:
             self.line_2_textbox.place(x=100, y=695)
 
             self.autochart_button.place(x=10, y=750, width=70, height=25)
+            self.color_button.place(x=200, y=750)
+            self.cfg_reset_button.place(x=10, y=780, width=70, height=25)
             self.color_button.place(x=200, y=750)
 
             try:

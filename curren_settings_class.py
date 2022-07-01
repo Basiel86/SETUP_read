@@ -66,12 +66,13 @@ class CurrentSettings:
     ig_index_df = pd.read_excel(ig_index_filename, sheet_name='IG_Codes')
 
     def __init__(self):
-        self.graphs_list = {}
-        self.write_graphs(["Sin (x)"], filename="demo", md5="123")
 
-        # если папки нет - создаем
+        # если папки конфигов нет - создаем
         if not os.path.exists(self.cfg_dir):
             os.makedirs(self.cfg_dir)
+
+        self.graphs_list = {}
+        self.write_graphs(["Sin (x)"], filename="demo", md5="123")
 
         # дериктория сохранения файлов
         # save_dir = os.path.dirname(__file__) + "/Json"
@@ -83,6 +84,7 @@ class CurrentSettings:
         #     outfile.write(json_string)
 
     def write_graphs(self, header_row, filename, md5, check_cfg=True):
+
         """
         Инициализируем настройки всех графиков получив Список
         """
@@ -103,7 +105,7 @@ class CurrentSettings:
         self.file_info["filename"] = filename
         self.file_info["md5"] = md5
 
-        if filename != "demo" or check_cfg is True:
+        if filename != "demo" and check_cfg is True:
             self.check_cfg_exist()
 
     def get_current_settings(self, graph_name):

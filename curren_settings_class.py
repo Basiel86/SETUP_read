@@ -30,7 +30,8 @@ class CurrentSettings:
                         'temperature (product)', 'temperature (battery module)']
     time_list = ['time', 'время']
     speed_list = ['speed', 'скорость']
-    signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2']
+    signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2',
+                        'so echo loss (wm)', 'wt echo loss (wm)', 'echo loss by filtered data (wm)']
     orientation_list = ['orientation', 'угловое положение', 'угол', 'angle', 'pendulum']
     pressure_list = ['pressure (product)', 'pressure', 'давление']
     magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)',
@@ -53,13 +54,16 @@ class CurrentSettings:
         'yadd': 0.0,
         'ymult': 1.0,
         'x_desire': 1,
+        'line_1_ch': 0,
+        'line_1_value': 1,
+        'line_2_ch': 0,
+        'line_2_value': 2,
         'savgol': 0,
         'color': 'black',
         'lang': "RU"}
 
     ig_index_filename = resource_path('IG_Codes.xlsx')
     ig_index_df = pd.read_excel(ig_index_filename, sheet_name='IG_Codes')
-
 
     def __init__(self):
         self.graphs_list = {}
@@ -78,9 +82,9 @@ class CurrentSettings:
         # with open(f"{file_path}.json", "w", encoding='utf-8') as outfile:
         #     outfile.write(json_string)
 
-    def write_graphs(self, header_row, filename, md5):
+    def write_graphs(self, header_row, filename, md5, check_cfg=True):
         """
-        Инициализируем настройки всех графиков получви Список
+        Инициализируем настройки всех графиков получив Список
         """
         self.filename = filename
         self.md5 = md5
@@ -99,7 +103,7 @@ class CurrentSettings:
         self.file_info["filename"] = filename
         self.file_info["md5"] = md5
 
-        if filename != "demo":
+        if filename != "demo" or check_cfg is True:
             self.check_cfg_exist()
 
     def get_current_settings(self, graph_name):
@@ -113,6 +117,10 @@ class CurrentSettings:
     def set_x_major_all(self, xmajor):
         for graph_settings in self.graphs_list:
             self.graphs_list[graph_settings]['xmajor'] = float(xmajor)
+
+    def set_x_desire_all(self, x_desire):
+        for graph_settings in self.graphs_list:
+            self.graphs_list[graph_settings]['x_desire'] = float(x_desire)
 
     def set_x_change_status(self, x_change_status):
         self.misc_list['is_x_changed'] = x_change_status
@@ -139,6 +147,12 @@ class CurrentSettings:
                     return True
             return False
 
+    def update_diff_dict(self, dict_A, dict_B):
+        for i in dict_A:
+            if i in dict_B:
+                if dict_A[i] != dict_B[i]:
+                    dict_A[i] = dict_B[i]
+        return dict_A
 
     def check_cfg_exist(self):
         """
@@ -162,8 +176,20 @@ class CurrentSettings:
                     cfg_md5 = json_pack_list['file_info']['md5']
                     if cfg_md5 == self.file_info['md5']:
                         print("CFG exists")
-                        self.graphs_list.update(json_pack_list['graphs_list'])
-                        self.misc_list.update((json_pack_list['misc_list']))
+
+                        # обновление нового конфига по старому (если не бьются количества)
+                        try:
+                            for graph in self.graphs_list:
+                                self.graphs_list[graph] = self.update_diff_dict(self.graphs_list[graph],
+                                                                                json_pack_list['graphs_list'][graph])
+
+                                # self.graphs_list.update(json_pack_list['graphs_list'])
+
+                                # апдэйт с полной заменой
+                                self.misc_list.update((json_pack_list['misc_list']))
+                        except Exception as ex:
+                            print("Error in CFG updater: ", ex)
+
                         self.encrypt(filepath)
                         return True
         print("CFG NOT exists")
@@ -220,7 +246,10 @@ class CurrentSettings:
                               "ymajor": 0.5,
                               "ylabel_RU": "Скорость, м/с",
                               "ylabel_EN": "Speed, m/s",
-                              "color": "darkslateblue"}
+                              "color": "darkslateblue",
+                              'line_1_ch': 0,
+                              'line_1_value': 5.0
+                              }
 
             self.graphs_list[graph_name].update(graph_settings)
 
@@ -249,7 +278,12 @@ class CurrentSettings:
                               "ymajor": 5,
                               "ylabel_RU": "Намагниченность, кА/м",
                               "ylabel_EN": "Magnetization, kA/m",
-                              "color": "maroon"}
+                              "color": "maroon",
+                              'line_1_ch': 1,
+                              'line_1_value': 10.0,
+                              'line_2_ch': 1,
+                              'line_2_value': 30.0,
+                              }
 
             self.graphs_list[graph_name].update(graph_settings)
 
@@ -340,7 +374,7 @@ def write_key():
 
 def is_srv_list_exist():
     srv_path_file_name = "Server config folder path.txt"
-    srv_path_file_path = os.path.join(os.path.abspath("."),srv_path_file_name)
+    srv_path_file_path = os.path.join(os.path.abspath("."), srv_path_file_name)
     if not os.path.exists(srv_path_file_path):
         with open(srv_path_file_path, 'w') as file:
             file.write(f"\\\\192.168.1.201\Public\Share\BVConfigs")

@@ -3,7 +3,6 @@ import hashlib
 import math
 import numpy as np
 import os
-import sys
 import tkinter
 from PIL import Image
 from datetime import datetime, date
@@ -29,7 +28,7 @@ import curren_settings_class as cs
 
 
 class BViewer:
-    EXP_DAY = '2022-07-07'
+    EXP_DAY = '2022-07-30'
     header_item = ''
     export_path = ''
 
@@ -60,6 +59,17 @@ class BViewer:
         self.noise_variable = IntVar()
         self.noise_checkbox = Checkbutton(master=self.window, variable=self.noise_variable, text="Enable Noise",
                                           onvalue=1, offvalue=0, command=self.noise_checkbox_change)
+
+        # Lines
+        self.line_1_variable = IntVar()
+        self.line_1_checkbox = Checkbutton(master=self.window, variable=self.line_1_variable, text="Line 1 Red",
+                                           onvalue=1, offvalue=0, command=self.line_1_checkbox_change)
+        self.line_2_variable = IntVar()
+        self.line_2_checkbox = Checkbutton(master=self.window, variable=self.line_2_variable, text="Line 2 Blue",
+                                           onvalue=1, offvalue=0, command=self.line_2_checkbox_change)
+        self.line_1_textbox = Entry(master=self.window, width=10)
+        self.line_2_textbox = Entry(master=self.window, width=10)
+
         self.yaxis_name_textbox = Entry(master=self.window, width=35)
         self.xaxis_name_textbox = Entry(master=self.window, width=35)
         self.yaxis_name_label = Label(master=self.window, text="Y Axis Name")
@@ -255,17 +265,15 @@ class BViewer:
 
         self.ax.plot(x_axis, y_axis, color=colors['darkgreen'], linewidth=1)
 
-        # Линия для графика скорости
-        # if list_item_in_string(speed_list, graph_name.lower()):
-        #     x1, y1 = [0, round_up_custom(max(x_axis), 100)], [4, 4]
-        #     ax.plot(x1, y1, color=colors['darkred'], linewidth=2)
-
-        # Линия для графика намагниченности
         # if self.list_item_in_string(self.cur_set.magnetization_list, graph_name.lower()):
-        #     x1, y1 = [0, self.round_up_custom(max(x_axis), 100)], [10, 10]
-        #     self.ax.plot(x1, y1, color=colors['red'], linewidth=2)
-        #     x2, y2 = [0, self.round_up_custom(max(x_axis), 100)], [30, 30]
-        #     self.ax.plot(x2, y2, color=colors['blue'], linewidth=2)
+        if self.line_1_variable.get() == 1:
+            x1, y1 = [0, self.round_up_custom(max(x_axis), 100)], [float(self.line_1_textbox.get()),
+                                                                   float(self.line_1_textbox.get())]
+            self.ax.plot(x1, y1, color=colors['red'], linewidth=2)
+        if self.line_2_variable.get() == 1:
+            x2, y2 = [0, self.round_up_custom(max(x_axis), 100)], [float(self.line_2_textbox.get()),
+                                                                   float(self.line_2_textbox.get())]
+            self.ax.plot(x2, y2, color=colors['blue'], linewidth=2)
 
         graph_settings = self.cur_set.graphs_list[graph_name]
         self.ax.grid()
@@ -338,14 +346,15 @@ class BViewer:
                 self.ax.yaxis.set_major_formatter(dates.DateFormatter('%H:%M:%S'))
             else:
                 self.ax.yaxis.set_major_formatter(FormatStrFormatter(graph_settings['ymax_format']))
+
             # Лэйбл оси
             lang = self.language_variable.get()
-            plt.ylabel(graph_settings[f'ylabel_{graph_settings["lang"]}'], labelpad=10,
+            plt.ylabel(graph_settings[f'ylabel_{lang}'], labelpad=10,
                        font={'family': 'sans', 'weight': 'bold', 'size': 18})
             # Меняем цвет графика
             plt.gca().get_lines()[0].set_color(graph_settings['color'])
         else:
-            if self.cur_set.get_x_change_status() == False:
+            if self.cur_set.get_x_change_status() is False:
                 self.ax.yaxis.set_major_locator(MaxNLocator())
 
         # Формат оси
@@ -449,11 +458,11 @@ class BViewer:
             desire_coeff = 1
         self.x_axis_mult = self.x_axis * desire_coeff
 
-        self.status_label2.config(text=f"Average={y_axis_average_value}\n\n"
+        self.status_label2.config(text=f"Average={y_axis_average_value}   |   "
                                        f"X-MIN = {x_axis_min_value} : "
-                                       f"X-MAX = {x_axis_max_value}\n"
+                                       f"X-MAX = {x_axis_max_value}   |   "
                                        f"Y-MIN = {y_axis_min_value} : "
-                                       f"Y-MAX = {y_axis_max_value}\n\n"
+                                       f"Y-MAX = {y_axis_max_value}   |   "
                                        f"{self.cur_set.file_info['filename']}", anchor='w')
 
         self.make_graph(self.x_axis_mult, y_axis_use, self.y_axis_name)
@@ -505,6 +514,16 @@ class BViewer:
             self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='xmajor', cfg_value=xmajor_value)
             self.canvas.draw()
 
+    def set_x_desire(self, event):
+        x_desire = self.x_desire_textbox.get()
+        self.cur_set.set_x_desire_all(x_desire)
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="x_desire",
+                                            cfg_value=x_desire)
+        self.cur_set.set_x_change_status(False)
+        self.plot()
+        self.get_minmax_major_from_graph()
+        self.write_current_settings()
+
     def set_yminmax(self, event):
         self.y_change_status = True
         if self.ymin_textbox.get() != "" and self.ymax_textbox.get() != 0:
@@ -518,6 +537,7 @@ class BViewer:
             self.canvas.draw()
 
     def set_ymajor(self, event):
+
         ymin = float(self.ymin_textbox.get())
         ymax = float(self.ymax_textbox.get())
         ymajor = float(self.ymajor_textbox.get())
@@ -534,7 +554,7 @@ class BViewer:
 
         ticks_count = (ymax - ymin) / ymajor
 
-        if 5 < ticks_count < 100:
+        if 2 < ticks_count < 100:
             # Локатор с фиксированным шагом
             self.ax.yaxis.set_major_locator(MultipleLocator(base=ymajor))
             # self.get_minmax_major_from_graph()
@@ -569,15 +589,6 @@ class BViewer:
         ymult = self.y_mult_textbox.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="ymult", cfg_value=ymult)
         self.plot()
-
-    def set_xmult(self, event):
-        xmult_desire = self.x_desire_textbox.get()
-        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name="x_desire",
-                                            cfg_value=xmult_desire)
-        self.cur_set.set_x_change_status(False)
-        self.plot()
-        self.get_minmax_major_from_graph()
-        self.write_current_settings()
 
     def change_language(self, event):
         lang = self.language_variable.get()
@@ -672,6 +683,17 @@ class BViewer:
         ymult = self.y_mult_textbox.get()
         self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='ymult', cfg_value=ymult)
 
+        line_1_ch = self.line_1_variable.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_1_ch', cfg_value=line_1_ch)
+        line_1_value = float(self.line_1_textbox.get())
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_1_value',
+                                            cfg_value=line_1_value)
+        line_2_ch = self.line_2_variable.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_2_ch', cfg_value=line_2_ch)
+        line_2_value = float(self.line_2_textbox.get())
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_2_value',
+                                            cfg_value=line_2_value)
+
     def copy2clipboard(fig=None):
         '''
         copy a matplotlib figure to clipboard as BMP on windows
@@ -700,6 +722,7 @@ class BViewer:
             sleep(0.2)
             # copy2clipboard(fig)
 
+    # Берем настройки из конфига
     def form_update_current_settings(self):
 
         if self.y_axis_name != "":
@@ -752,6 +775,25 @@ class BViewer:
             self.x_desire_textbox.delete(0, END)
             self.x_desire_textbox.insert(0, x_desire)
 
+            line_1_ch = self.cur_set.graphs_list[self.y_axis_name]['line_1_ch']
+            if line_1_ch == 1:
+                self.line_1_variable.set(1)
+            else:
+                self.line_1_variable.set(0)
+
+            line_1_value = self.cur_set.graphs_list[self.y_axis_name]['line_1_value']
+            self.line_1_textbox.delete(0, END)
+            self.line_1_textbox.insert(0, line_1_value)
+
+            line_2_ch = self.cur_set.graphs_list[self.y_axis_name]['line_2_ch']
+            if line_2_ch == 1:
+                self.line_2_variable.set(1)
+            else:
+                self.line_2_variable.set(0)
+            line_2_value = self.cur_set.graphs_list[self.y_axis_name]['line_2_value']
+            self.line_2_textbox.delete(0, END)
+            self.line_2_textbox.insert(0, line_2_value)
+
     def select_file(self):
 
         self.cur_set.json_export()
@@ -796,8 +838,8 @@ class BViewer:
         self.add_textbox.insert(0, 0)
         self.y_mult_textbox.delete(0, END)
         self.y_mult_textbox.insert(0, 1)
-        self.x_desire_textbox.delete(0, END)
-        self.x_desire_textbox.insert(0, 1)
+        self.cur_set.set_x_desire_all(1)
+
         self.plot()
         self.get_minmax_major_from_graph()
         self.write_current_settings()
@@ -819,6 +861,30 @@ class BViewer:
             self.filter_value_label.config(text="Noise Value")
         else:
             self.filter_value_label.config(text="Smoothing Value")
+
+    def line_1_textbox_change(self, event):
+        line_1_value = self.line_1_textbox.get()
+        print("line_1_change_textbox")
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_1_value',
+                                            cfg_value=line_1_value)
+        self.plot()
+
+    def line_2_textbox_change(self, event):
+        line_2_value = self.line_2_textbox.get()
+        print("line_2_change_textbox")
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_2_value',
+                                            cfg_value=line_2_value)
+        self.plot()
+
+    def line_1_checkbox_change(self):
+        line_1_ch = self.line_1_variable.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_1_ch', cfg_value=line_1_ch)
+        self.plot()
+
+    def line_2_checkbox_change(self):
+        line_2_ch = self.line_2_variable.get()
+        self.cur_set.write_current_settings(graph_name=self.y_axis_name, cfg_name='line_2_ch', cfg_value=line_2_ch)
+        self.plot()
 
     @staticmethod
     def resource_path(relative_path):
@@ -880,11 +946,11 @@ class BViewer:
             self.y_mult_textbox.insert(0, "1")
             self.y_mult_textbox.bind('<Return>', self.set_ymult)
             self.x_desire_textbox.insert(0, "1")
-            self.x_desire_textbox.bind('<Return>', self.set_xmult)
+            self.x_desire_textbox.bind('<Return>', self.set_x_desire)
             self.xaxis_name_textbox.bind('<Return>', self.set_xlabel_name)
             self.yaxis_name_textbox.bind('<Return>', self.set_ylabel_name)
             self.filter_variable.set(self.filter_options[0])
-            self.status_label2.place(x=10, y=700)
+            self.status_label2.place(x=800, y=820)
             self.filter_value_label.place(x=10, y=380)
             self.noise_checkbox.place(x=120, y=380)
             self.filter_slider.place(x=10, y=400)
@@ -911,8 +977,6 @@ class BViewer:
             self.xaxis_name_textbox.place(x=10, y=561)
             self.yaxis_name_label.place(x=10, y=580)
             self.yaxis_name_textbox.place(x=10, y=601)
-            self.autochart_button.place(x=10, y=670, width=70, height=25)
-            self.color_button.place(x=200, y=670)
             self.add_label.place(x=10, y=620)
             self.add_textbox.place(x=10, y=641)
             self.y_mult_label.place(x=80, y=620)
@@ -920,9 +984,22 @@ class BViewer:
             self.x_desire_label.place(x=150, y=620)
             self.x_desire_textbox.place(x=150, y=641)
 
+            self.line_1_textbox.bind('<Return>', self.line_1_textbox_change)
+            self.line_1_checkbox.place(x=10, y=670)
+            self.line_1_textbox.place(x=100, y=670)
+
+            self.line_2_textbox.bind('<Return>', self.line_2_textbox_change)
+            self.line_2_checkbox.place(x=10, y=695)
+            self.line_2_textbox.place(x=100, y=695)
+
+            self.autochart_button.place(x=10, y=750, width=70, height=25)
+            self.color_button.place(x=200, y=750)
+
             try:
                 open_with_path = str(sys.argv[1])
                 # print("sys path - " + open_with_path)
+                self.file_path = os.path.dirname(str(sys.argv[1]))
+                print(self.file_path)
                 self.open_with_file(open_with_path)
             except Exception as ex:
                 # print("sys path error: " + str(ex))

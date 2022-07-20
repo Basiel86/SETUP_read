@@ -1,48 +1,48 @@
-from io import StringIO
-from time import sleep
+import numpy as np
+from numpy import inf
 
-from PIL import Image
-import win32clipboard
-
-
-def copy2clipboard(fig=None):
-    '''
-    copy a matplotlib figure to clipboard as BMP on windows
-    http://stackoverflow.com/questions/7050448/write-image-to-windows-clipboard-in-python-with-pil-and-win32clipboard
-    '''
-    if not fig:
-        fig = gcf()
-
-    fig.canvas()
-    output = StringIO()
-    # fig.savefig(output, format='bmp') # bmp not supported
-    buf = fig.canvas.buffer_rgba()
-    w = int(fig.get_figwidth() * fig.dpi)
-    h = int(fig.get_figheight() * fig.dpi)
-    im = Image.frombuffer('RGBA', (w, h), buf)
-    im.transpose(Image.FLIP_TOP_BOTTOM).convert("RGB").save(output, "BMP")
-    data = output.getvalue()[14:]  # The file header off-set of BMP is 14 bytes
-    output.close()
-
-    try:
-        win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        # win32clipboard.SetClipboardData(win32clipboard.CF_BITMAP, data) # did not work!
-        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)  # DIB = device independent bitmap
-        win32clipboard.CloseClipboard()
-    except:
-        sleep(0.2)
-        copy2clipboard(fig)
-
+# np.seterr(divide='ignore', invalid='ignore')
 
 if __name__ == '__main__':
-    from pylab import *
+    x1 = np.array(
+        [[1, 44634.53952],
+         [2, 44634.53952],
+         [3, 44634.53953],
+         [4, 44634.53953],
+         [5, 44634.53954]])
 
-    fig = figure()
-    ax = subplot(111)
-    ax.plot(range(10))
-    draw()
+    print(x1)
 
-    copy2clipboard(fig)
+    # забираем 2 столбца
+    y1 = x1[:, 0]
+    y2 = x1[:, 1]
 
+    # считаем разницу для каждого
+    y1 = np.diff(y1)
+    y2 = np.diff(y2) * 100000
 
+    # делим друг на друга для скорости
+    # удаляем деление на ноль
+    z = y1 / y2
+    z[z == inf] = 0
+
+    # перевращаем результаты в столбцы
+    z = np.resize(z, len(z) + 1)
+    z = np.reshape(z, (len(z), 1))
+
+    # добавляем столбец в наш массив
+    x1 = np.append(x1, z, axis=1)
+
+    print(x1)
+
+    # x2 = np.array([10, 20, 30, 40, 50])
+    # y = np.diff(x1)
+    # y1 = np.diff(x1[0])
+    # y2 = np.diff(x2)
+    #
+    # z = y1 / y2
+    #
+    # print(y1)
+    # print(y2)
+    #
+    # print(x1.names)

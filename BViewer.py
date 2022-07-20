@@ -2,6 +2,7 @@ import csv
 import hashlib
 import math
 import numpy as np
+from numpy import inf
 import os
 import tkinter
 
@@ -11,7 +12,6 @@ from tkinter import *
 from tkinter import colorchooser
 from tkinter import filedialog as fd
 import xlrd
-
 
 from io import BytesIO
 from time import sleep
@@ -32,7 +32,7 @@ import curren_settings_class as cs
 
 
 class BViewer:
-    EXP_DAY = '2022-07-30'
+    EXP_DAY = '2022-08-05'
     header_item = ''
     export_path = ''
 
@@ -45,7 +45,6 @@ class BViewer:
 
         self.ax = self.fig.add_subplot(111)
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.window, pack_toolbar=False)
-
 
         self.filter_value_var = StringVar()
         self.filter_options = ["no filter",
@@ -109,15 +108,12 @@ class BViewer:
                                        text="CFG Reset")
         self.color_button = Button(master=self.window, text='', command=self.select_color, width=2)
 
-
         self.cur_set = cs.CurrentSettings()
 
         self.cur_set.set_x_change_status(False)
         self.file_path = ""
         self.file_path_full = ""
 
-        self.accept_graphs = ['speed', 'orientation', 'temperature', 'скорость', 'температура', 'угловое положение',
-                              'magnetic intensity (sensors)']
         self.header_row = ""
         self.axis_table = ""
         self.filepath = ""
@@ -125,6 +121,7 @@ class BViewer:
         self.slider_value = 0
         self.x_axis = []
         self.time_data_array = []
+        self.speed_custom = []
         self.y_axis = []
         self.x_axis_name = ''
         self.y_axis_name = ''
@@ -190,6 +187,37 @@ class BViewer:
         if header_row[0] == '':
             header_row = np.delete(header_row, 0)
 
+        if "Time" in header_row:
+            # добавляем новый график
+            header_row_df = pd.DataFrame(header_row)
+            header_row_df = header_row_df.append({0: 'Speed (based on time)'}, ignore_index=True)
+            header_row = header_row_df.to_numpy()
+            header_row = np.reshape(header_row, len(header_row))
+
+            dist_index = np.argwhere(header_row == "Distance")[0][0]
+            time_index = np.argwhere(header_row == "Time")[0][0]
+            speed_custom_index = np.argwhere(header_row == "Speed (based on time)")[0][0]
+
+            # забираем 2 столбца
+            dist_col = axis_array[:, dist_index]
+            time_col = axis_array[:, time_index]
+
+            # считаем разницу для каждого
+            dist_diff_col = np.diff(dist_col)
+            time_diff_col = np.diff(time_col) * 100000 / 1.142857143
+
+            # делим друг на друга для скорости
+            # удаляем деление на ноль
+            speed_by_time_col = dist_diff_col / time_diff_col
+            speed_by_time_col[speed_by_time_col == inf] = 0
+
+            # перевращаем результаты в столбцы
+            speed_by_time_col = np.resize(speed_by_time_col, len(speed_by_time_col) + 1)
+            speed_by_time_col = np.reshape(speed_by_time_col, (len(speed_by_time_col), 1))
+
+            # добавляем столбец в наш массив
+            axis_array = np.append(axis_array, speed_by_time_col, axis=1)
+
         self.file_path_full = filename
         md5_val = self.md5(filename=filename)
         self.cur_set.write_graphs(header_row=header_row, filename=os.path.basename(filename), md5=md5_val,
@@ -204,8 +232,10 @@ class BViewer:
             date_time_array = np.empty((len(axis_array[:, y_index]), 1), dtype=object)
             for i, elem in enumerate(axis_array[:, y_index]):
                 date_time_array[i, 0] = datetime(*xlrd.xldate_as_tuple(elem, 0))
-
             self.time_data_array = date_time_array
+
+
+
 
         self.graphs_listbox.delete(0, END)
         for graph_name in header_row:
@@ -394,7 +424,7 @@ class BViewer:
         h = int(self.fig.get_figheight() * self.fig.dpi)
         im = Image.frombuffer('RGBA', (w, h), buf)
         im.convert("RGB").save(output, "BMP")
-        #im.transpose(Image.FLIP_TOP_BOTTOM).convert("RGB").save(output, "BMP")
+        # im.transpose(Image.FLIP_TOP_BOTTOM).convert("RGB").save(output, "BMP")
         data = output.getvalue()[14:]  # The file header off-set of BMP is 14 bytes
         output.close()
 
@@ -1024,10 +1054,8 @@ class BViewer:
                 print(self.file_path)
                 self.open_with_file(open_with_path)
             except Exception as ex:
-                # print("sys path error: " + str(ex))
                 x = np.linspace(0, 300, 150)
                 y = np.sin(2 * np.pi * (x - 0.01 * 1)) + 1
-
                 self.make_graph(x, y, "Sin (x)")
 
             def on_closing():

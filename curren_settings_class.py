@@ -21,7 +21,7 @@ def resource_path(relative_path):
 class CurrentSettings:
     # дериктория сохранения файлов
 
-    enable_encryption = True
+    enable_encryption = False
     misc_list = {'is_x_changed': False}
     cfg_dir = os.path.abspath(".") + "\\CFGs"
     graphs_list = {}
@@ -29,9 +29,10 @@ class CurrentSettings:
     temperature_list = ['temperature', 'температура', 'temp', 'внутреняя температура', 'внешняя температура',
                         'temperature (product)', 'temperature (battery module)']
     time_list = ['time', 'время']
-    speed_list = ['speed', 'скорость']
+    speed_list = ['speed', 'скорость', 'speed (based on time)']
     signal_loss_list = ['потеря сигнала', 'signal loss', 'abnormal sensors t1', 'abnormal sensors t2',
-                        'so echo loss (wm)', 'wt echo loss (wm)', 'echo loss by filtered data (wm)']
+                        'so echo loss (wm)', 'wt echo loss (wm)', 'echo loss by filtered data (wm)',
+                        'total data loss (wm)']
     orientation_list = ['orientation', 'угловое положение', 'угол', 'angle', 'pendulum']
     pressure_list = ['pressure (product)', 'pressure', 'давление']
     magnetization_list = ['magnetic induction (sensors)', 'magnetic induction (wt gauge)',
@@ -250,7 +251,9 @@ class CurrentSettings:
                               "ylabel_EN": "Speed, m/s",
                               "color": "darkslateblue",
                               'line_1_ch': 0,
-                              'line_1_value': 5.0
+                              'line_1_value': 4.0,
+                              'line_2_ch': 0,
+                              'line_2_value': 0.3
                               }
 
             self.graphs_list[graph_name].update(graph_settings)
